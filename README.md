@@ -7,6 +7,11 @@ MITRE ATT&CK. El objetivo es que una regla se pueda leer, revisar en un
 Pull Request y probar antes de activarla en producción, en vez de vivir
 solo como configuración suelta dentro de la consola de SentinelOne.
 
+> **Aviso:** este es un proyecto independiente de GrayHats. No está afiliado,
+> patrocinado ni respaldado por SentinelOne, Inc. SentinelOne y los demás
+> nombres de productos citados son marcas de sus respectivos propietarios y se
+> mencionan solo para identificar la plataforma a la que se dirigen las reglas.
+
 ## Sobre este proyecto
 
 Esta biblioteca es una iniciativa de GrayHats para contribuir a mejorar la
