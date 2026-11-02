@@ -1,0 +1,46 @@
+name: "Defense Evasion - Disable PowerShell History Logging"
+author: "GrayHats Detection Team"
+license: "AGPL-3.0-or-later"
+os: windows
+coverage: full
+validation_status: validated
+last_validated: "2026-10-14"
+mitre:
+  tactic: "Defense Impairment"
+  tactics:
+    - "Defense Impairment"
+  techniques:
+    - id: T1690
+      name: "Prevent Command History Logging"
+severity: High
+category: "Defense Impairment"
+action: Detect
+action_description: >
+  Se ha deshabilitado o redirigido el historial de comandos de Powershell. Posible
+  intento de ocultar la actividad en el host.
+scope: site
+status: Draft
+expiration: Permanent
+tags:
+  - defense-evasion
+  - windows
+  - powershell
+  - psreadline
+  - disable-history
+notes:
+  - >
+    La regla cubre dos métodos para deshabilitar el historial de Powershell,
+    por un lado se cubre la cmdline que desactiva el historial con 'SaveNothing'
+    y por otro el cambio del archivo que almacena el historial con 'HistorySavePath'.
+
+query: |
+  event.type = 'Process Creation'
+  AND endpoint.os = 'windows'
+  AND tgt.process.name in:anycase ('powershell.exe', 'pwsh.exe')
+  AND (
+    tgt.process.cmdline contains:anycase 'Set-PSReadLineOption'
+    AND (
+        tgt.process.cmdline contains:anycase 'SaveNothing'
+        OR tgt.process.cmdline contains:anycase '-HistorySaveP'
+    )
+  )

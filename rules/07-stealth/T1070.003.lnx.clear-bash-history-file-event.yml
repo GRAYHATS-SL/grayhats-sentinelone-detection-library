@@ -1,0 +1,73 @@
+# T1070.003.lnx.clear-bash-history-file-event.yml
+name: "Defense Evasion - Shell History File Tampering (File Event)"
+author: "GrayHats Detection Team"
+license: "AGPL-3.0-or-later"
+os: linux
+art_test: yes
+art_technique: T1070.003
+tests_included: [1, 2, 3, 4, 5]
+test_guids:
+  - "a934276e-2be5-4a36-93fd-98adbb5bd4fc"   # Test #1: rm
+  - "cbf506a5-dd78-43e5-be7e-a46b7c7a0a11"   # Test #2: echo "" >
+  - "b1251c35-dcd3-4ea1-86da-36d27b54f31f"   # Test #3: cat /dev/null >
+  - "23d348f3-cc5c-4ba9-bd0a-ae09069f0914"   # Test #4: ln -sf /dev/null
+  - "47966a1d-df4f-4078-af65-db6d9aa20739"   # Test #5: truncate -s0
+coverage: full
+validation_status: not_tested
+last_validated: null
+mitre:
+  tactic: "Stealth"
+  tactics:
+    - "Stealth"
+  techniques:
+    - id: T1070.003
+      name: "Indicator Removal on Host: Clear Command History"
+severity: High
+category: "Stealth"
+action: Detect
+action_description: >
+  Detecta por EVENTO DE FICHERO (no por cmdline) el borrado, truncado o
+  modificación de los ficheros de historial de shell (~/.bash_history y
+  equivalentes). Complementa la regla por comando: caza las redirecciones del
+  shell (echo "" > file, cat /dev/null > file) que no generan un proceso propio,
+   y es robusta frente a la variante concreta de comando usada. Basada en los
+  tests ART T1070.003 #1-#5.
+scope: site
+status: Draft
+expiration: Permanent
+tags:
+  - defense-evasion
+  - linux
+  - clear-history
+  - bash-history
+  - file-event
+  - anti-forensics
+notes:
+  - >
+    Ángulo de fichero, preferente sobre el de comando para este bloque: al observar
+    el evento sobre el fichero (File Deletion/Modification/Truncation), caza las
+    cinco variantes por igual sin depender de qué binario o redirección se usó. En
+    particular resuelve #2 y #3 (echo/cat con ">"), donde la redirección la ejecuta
+    el shell y puede no aparecer en la cmdline de un proceso.
+  - >
+    Cubre .bash_history, .zsh_history, .sh_history y equivalentes en el home de
+    cualquier usuario. Una modificación/borrado del historial de OTRO usuario, o
+    fuera de un cierre de sesión normal, es la señal fuerte.
+  - >
+    El symlink a /dev/null (#4, "ln -sf /dev/null ~/.bash_history") puede
+    manifestarse como creación de un symlink o modificación del fichero; verificar
+    cómo lo registra el tenant (evento de File Creation con tipo symlink, o
+    modificación). Si el esquema expone el tipo/target del enlace, añadir esa
+    condición mejora la cobertura del #4.
+  - >
+    Falsos positivos: el cierre de sesión normal reescribe .bash_history; un usuario
+    limpiando su propio historial. Filtrar por borrado/truncado (tamaño a 0) más que
+    por simple escritura reduce el ruido. Validar en Detect.
+  - >
+    Verificar event.type de fichero en Linux ('File Deletion', 'File Modification')
+    y el campo de ruta (tgt.file.path), y si existe un campo de tipo de operación
+    (delete/truncate/modify) para afinar.
+query: |
+  event.type in ('File Modification', 'File Deletion') 
+  and endpoint.os = 'linux' 
+  and tgt.file.path matches '(?i).*(\.bash_history|\.zsh_history|\.sh_history|\.history)$'

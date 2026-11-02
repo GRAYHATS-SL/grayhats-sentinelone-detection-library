@@ -1,0 +1,4 @@
+console_url: "https://<tu-consola>.sentinelone.net"
+account_id: ""
+site_id: ""
+default_scope: "site"

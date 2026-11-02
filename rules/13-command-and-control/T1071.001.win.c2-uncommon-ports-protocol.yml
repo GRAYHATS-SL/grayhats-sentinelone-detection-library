@@ -1,0 +1,72 @@
+name: "Command and Control - Outbound Connection to Uncommon Port with Suspicious Protocol"
+author: "GrayHats Detection Team"
+license: "AGPL-3.0-or-later"
+os: windows
+mitre:
+  tactic: "Command and Control"
+  techniques:
+    - id: T1071.001
+      name: "Application Layer Protocol: Web Protocols"
+  secondary:
+    - id: T1571
+      name: "Non-Standard Port"
+      tactic: "Command and Control"
+severity: High
+category: "Command and Control"
+action: Detect
+action_description: >
+  Detecta procesos del sistema estableciendo conexiones salientes a
+  puertos altos no estándar (excluyendo 80, 443, 8080, 8443), lo que
+  puede indicar C2 en puertos alternativos como 4444, 8081, 9090, etc.
+scope: site
+status: Draft
+expiration: Permanent
+tags:
+  - command-and-control
+  - c2
+  - non-standard-port
+  - suspicious-protocol
+notes:
+  - >
+    Frameworks como Cobalt Strike, Sliver, Metasploit y Empire
+    permiten configurar listeners en puertos arbitrarios. Los
+    atacantes usan puertos como 4444, 5555, 6666, 8081, 8443,
+    9090, 9999 para evadir filtros perimetrales.
+  - >
+    Esta regla excluye puertos estándar (80, 443, 8080, 8443) y
+    servicios comunes (DNS 53, SMB 445, RDP 3389). Si tu
+    organización usa aplicaciones legítimas en puertos altos,
+    añadir exclusiones específicas.
+  - >
+    El filtro de procesos se centra en intérpretes y binarios del
+    sistema que los atacantes usan para establecer conexiones C2.
+    Ajustar según tus aplicaciones legítimas.
+  - >
+    SOLAPE CONOCIDO: muy similar a
+    rules/exfiltration/win-to-uncommon-ports-exfiltration.yml (mismo
+    concepto de puerto no estándar, listas de procesos/puertos algo
+    distintas). Mismo criterio que en win-c2-dns-tunneling.yml:
+    decide si prefieres mantener ambas o consolidar.
+  - >
+    RESUELTO con lo confirmado en win-to-uncommon-ports-exfiltration.yml:
+    event.type = 'IP Connect' (no "Network Connection"),
+    event.network.direction (no tgt.network.direction), el campo de
+    puerto destino es dst.port.number (no tgt.network.port), el
+    operador ">" sí funciona sobre campos numéricos, y "in (...)"
+    acepta números sin comillas. Con "dst.port.number > 1024" ya
+    quedan fuera todos los puertos bajos (22, 25, 53, 445, etc.) sin
+    necesidad de listarlos uno a uno; solo hace falta excluir los
+    puertos altos legítimos (3389, 8080, 8443).
+  - >
+    SE QUITÓ la exclusión de dominios por dns.request: un evento IP
+    Connect no lleva poblado ese campo (confirmado en la regla
+    hermana de exfiltración) — no filtraba nada. Para excluir destinos
+    legítimos, usar dst.ip.address (rangos corporativos/cloud
+    conocidos) en su lugar.
+validation_status: not_tested
+query: |
+  event.type = 'IP Connect'
+    and event.network.direction = 'OUTGOING'
+    and src.process.name contains:anycase ('powershell.exe', 'pwsh.exe', 'cmd.exe', 'wscript.exe', 'cscript.exe', 'mshta.exe', 'rundll32.exe', 'regsvr32.exe', 'java.exe', 'javaw.exe')
+    and dst.port.number > 1024
+    and !(dst.port.number in (3389, 8080, 8443))

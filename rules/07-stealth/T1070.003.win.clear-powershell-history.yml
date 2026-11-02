@@ -1,0 +1,66 @@
+name: "Defense Evasion - Clear PowerShell Command History"
+author: "GrayHats Detection Team"
+license: "AGPL-3.0-or-later"
+os: windows
+mitre:
+  tactic: "Stealth"
+  tactics:
+    - "Stealth"
+  techniques:
+    - id: T1070.003
+      name: "Indicator Removal on Host: Clear Command History"
+severity: High
+category: "Stealth"
+action: Detect
+action_description: >
+  Se ha borrado el historial de comandos ejecutados en Powershell. Posible
+  indicio de ocultación.
+scope: site
+status: Draft
+expiration: Permanent
+tags:
+  - defense-evasion
+  - windows
+  - powershell
+  - psreadline
+  - clear-history
+notes:
+  - >
+    Esta regla cubre la ejecución de la técnica en dos escenarios. Primero,
+    cuando un proceso lanza PowerShell (powershell.exe/pwsh.exe) pasándole el
+    comando de borrado como argumento: el comando viaja en la línea de comandos
+    del proceso creado (rama event.type = 'Process Creation'), lo típico de un
+    script o de otro proceso que invoca PowerShell de forma no interactiva.
+    Segundo, cuando ya había una consola de PowerShell abierta y el operador
+    teclea el comando a mano dentro de esa sesión: ahí no se crea un proceso
+    nuevo con el comando en la cmdline, sino que la ejecución queda registrada en
+    el contenido del comando (rama event.type = 'Command Script',
+    cmdScript.content). Con las dos ramas se detecta tanto la invocación
+    programática como la ejecución manual en una consola ya abierta.
+    - >
+    En la rama Command Script se excluye el contenido que contiene
+    '__VSCodeState': la integración de shell de Visual Studio Code (su terminal
+    integrada de PowerShell) genera contenido de comando con esa cadena de forma
+    recurrente, que casaba con las firmas y provocaba un falso positivo muy
+    común. La exclusión elimina ese ruido sin afectar a la detección real.
+art_test: true
+art_technique: T1070.003
+tests_included: [14]
+test_guids:
+  - "22c779cd-9445-4d3e-a136-f75adbf0315f"   # Test #14: Clear-History
+coverage: full
+validation_status: validated
+last_validated: "2026-09-17"
+syntax_checked: true
+query: |
+  endpoint.os = 'windows'
+  AND (
+      (event.type = 'Process Creation'
+       AND tgt.process.name contains:anycase ('powershell', 'pwsh')
+       AND tgt.process.cmdline contains:anycase ('Clear-History', 'ClearHistory', 'Remove-Module PSReadLine', 'MaximumHistoryCount'))
+      OR
+      (event.type = 'Command Script'
+       AND src.process.name contains:anycase ('powershell', 'pwsh')
+       AND cmdScript.content contains:anycase ('Clear-History', 'ClearHistory', 'Remove-Module PSReadLine', 'MaximumHistoryCount')
+       AND !(cmdScript.content contains:anycase '__VSCodeState'))
+  )

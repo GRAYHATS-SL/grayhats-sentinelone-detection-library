@@ -1,0 +1,47 @@
+name: "Scheduled Task Creation with Payload in Suspicious Path"
+author: "GrayHats Detection Team"
+license: "AGPL-3.0-or-later"
+os: windows
+mitre:
+  tactic: Persistence
+  techniques:
+    - id: T1053.005
+      name: "Scheduled Task/Job: Scheduled Task"
+severity: High
+category: Persistence
+action: Detect
+action_description: >
+  Se ha detectado la creación de una tarea programada sospechosa mediante
+  schtasks.exe, cuyo payload (argumento /tr) se ejecuta desde una ruta inusual
+  del sistema.
+scope: site
+status: Draft
+expiration: Permanent
+tags:
+  - persistence
+  - scheduled-task
+  - schtasks
+notes:
+  - >
+    Alcance: esta regla cubre exclusivamente la creación de tareas programadas
+    (schtasks.exe /create) discriminando por el argumento /tr, es decir, la ruta
+    del binario o script que la tarea ejecutará. Otras formas de definir la
+    acción de la tarea, como /xml (importación de una tarea completa desde un
+    fichero XML, donde el payload no aparece tras /tr), quedan fuera del alcance
+    y son objeto de una regla aparte.
+art_test: false
+syntax_checked: true
+validation_status: not_tested
+query: |
+  event.type = "Process Creation"
+  AND tgt.process.name = "schtasks.exe"
+  AND tgt.process.cmdline contains:anycase "/create"
+  AND tgt.process.cmdline contains:anycase "/tr"
+  AND (
+    tgt.process.cmdline contains:anycase ("C:\\Windows\\Temp\\", "C:\\Users\\Public\\", "C:\\PerfLogs\\", "C:\\Temp\\", "C:\\tmp\\", "C:\\ProgramData\\")
+    OR
+    (
+        tgt.process.cmdline contains:anycase "C:\\Users\\"
+        AND tgt.process.cmdline contains:anycase ("\\AppData\\Local\\Temp\\", "\\AppData\\Roaming\\", "\\Downloads\\", "\\Desktop\\", "\\Documents\\")
+    )
+  )

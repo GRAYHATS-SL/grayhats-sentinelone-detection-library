@@ -1,0 +1,61 @@
+name: "Command and Control - Connection to Known C2 Framework Default Port"
+author: "GrayHats Detection Team"
+license: "AGPL-3.0-or-later"
+os: windows
+mitre:
+  tactic: "Command and Control"
+  techniques:
+    - id: T1571
+      name: "Non-Standard Port"
+severity: Critical
+category: "Command and Control"
+action: Detect
+action_description: >
+  Detecta conexiones salientes a puertos por defecto de frameworks de C2/ataque
+  conocidos (4444 Metasploit, 50050 Cobalt Strike team server, 9001/9050 Tor,
+  8081, 1337, etc.). A diferencia de la regla genérica de puerto alto, estos
+  puertos concretos son firmas de herramientas ofensivas, de mucha mayor
+  fidelidad. Alerta con CUALQUIER proceso, no solo LOLBins.
+scope: site
+status: Draft
+expiration: Permanent
+tags:
+  - command-and-control
+  - c2
+  - known-port
+  - cobaltstrike
+  - metasploit
+  - high-fidelity
+notes:
+  - >
+    Puertos y su asociación: 4444/4445 (Metasploit/Meterpreter por defecto),
+    5555/6666 (varios RATs), 50050 (Cobalt Strike team server), 9001 (Tor OR /
+    algunos C2), 9050/9051 (Tor SOCKS), 1337/31337 ("leet", RATs y backdoors),
+    8081 (proxies/C2 alternativos). Son valores por defecto: un operador que los
+    cambia evade la regla, por eso se combina con la genérica de puerto alto y con
+    el análisis de beaconing.
+  - >
+    A diferencia de la regla genérica, esta NO restringe por src.process.name:
+    una conexión a 50050 o 4444 es sospechosa venga del proceso que venga
+    (incluido un binario inyectado con nombre legítimo). La fidelidad la aporta el
+    puerto, no el proceso.
+  - >
+    Excluye IPs internas (RFC1918 + loopback): algunos de estos puertos podrían
+    usarse legítimamente en desarrollo/interno (8081 en servidores de aplicación,
+    9001 en servicios varios). El foco es tráfico EXTERNO a estos puertos.
+  - >
+    Posibles FP: 8081 y 9001 tienen usos legítimos (proxies corporativos,
+    aplicaciones); si generan ruido, retirarlos y quedarse con los puertos
+    inequívocamente ofensivos (4444, 4445, 50050, 31337). 9050/9051 (Tor) son FP
+    solo si hay uso autorizado de Tor en la organización.
+  - >
+    Candidata a Critical + KillAndQuarantine tras validar: una conexión externa a
+    4444 o 50050 es de los indicadores de C2 más fiables que existen por puerto.
+    Se deja en Detect inicialmente por prudencia (verificar que 8081/9001 no hacen
+    ruido en el entorno).
+validation_status: not_tested
+query: |
+  event.type = 'IP Connect' 
+    and event.network.direction = 'OUTGOING' 
+    and !(dst.ip.address matches '^(10\.|127\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[01])\.)') 
+    and dst.port.number in (4444, 4445, 5555, 6666, 8081, 9001, 9050, 9051, 1337, 31337, 50050)

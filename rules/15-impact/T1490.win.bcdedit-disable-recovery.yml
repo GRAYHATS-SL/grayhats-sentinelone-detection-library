@@ -1,0 +1,57 @@
+name: "bcdedit - Disable Windows Recovery"
+author: "GrayHats Detection Team"
+license: "AGPL-3.0-or-later"
+os: windows
+mitre:
+  tactic: "Impact"
+  techniques:
+    - id: T1490
+      name: "Inhibit System Recovery"
+severity: High
+category: "Ransomware"
+action: "Kill"
+action_description: >
+  Mata el proceso bcdedit.exe antes de que la configuración de arranque llegue a
+  escribirse. Es una acción segura para este caso: bcdedit no es un proceso de
+  larga vida ni tiene hijos, y matarlo solo aborta el cambio de configuración de
+  arranque en curso, sin afectar a ningún otro servicio del endpoint.
+scope: site
+status: Draft
+expiration: Permanent
+tags: [ransomware, inhibit-system-recovery, bcdedit, lolbin, pre-encryption]
+notes:
+  - >
+    Cubre los dos parámetros de bcdedit que anulan la recuperación de Windows,
+    que hacen cosas distintas aunque el resultado sea el mismo: "recoveryenabled
+    no" desactiva la entrada de WinRE en el boot manager (el equipo ya no puede
+    arrancar en el entorno de recuperación), y "bootstatuspolicy
+    ignoreallfailures" impide que Windows lance la reparación automática tras
+    arranques fallidos. Ambos son precursores típicos de cifrado: se ejecutan
+    junto al borrado de shadow copies (vssadmin/wbadmin) minutos antes del
+    ransomware.
+  - >
+    Falsos positivos esperados: administración legítima de IT. Imágenes maestras,
+    kioscos y VMs de laboratorio se despliegan a veces con bootstatuspolicy
+    ignoreallfailures para evitar que un arranque fallido pare el equipo en la
+    pantalla de reparación. También lo tocan algunas herramientas de imaging y de
+    virtualización. El retro-hunt de 30 días debe medir esto antes de pasar a
+    Active; si aparece volumen, excluir por proceso padre o por grupo de
+    endpoints, nunca ampliando la cmdline.
+  - >
+    Comprobar antes de darla por entregable si las detecciones nativas de
+    SentinelOne (Behavioral AI / Static AI) ya cubren la manipulación del BCD.
+    Si lo cubren, la regla sigue valiendo como ejercicio del procedimiento pero
+    no como entregable. Anotar el resultado aquí.
+art_test: yes
+art_technique: T1490
+test_guids:
+  - "cf21060a-80b3-4238-a595-22525de4ab81"   # Test: Windows - Disable Windows Recovery Console Repair
+coverage: partial
+validation_status: not_tested
+last_validated: null
+query: |
+  endpoint.os = 'windows'
+  and event.type = 'Process Creation'
+  and tgt.process.name = 'bcdedit.exe'
+  and (tgt.process.cmdline contains:anycase ('recoveryenabled no', 'recoveryenabled off', 'recoveryenabled 0', 'recoveryenabled false')
+  or tgt.process.cmdline contains:anycase 'bootstatuspolicy ignoreallfailures')

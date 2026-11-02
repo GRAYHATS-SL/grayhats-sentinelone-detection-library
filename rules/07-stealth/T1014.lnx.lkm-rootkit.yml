@@ -1,0 +1,83 @@
+# T1014.lnx.lkm-rootkit.yml
+name: "Rootkit - Linux Kernel Module Load (LKM Rootkit)"
+author: "GrayHats Detection Team"
+license: "AGPL-3.0-or-later"
+os: linux
+art_test: yes
+art_technique: T1014
+tests_included: [1, 2, 4]
+test_guids:
+  - "dfb50072-e45a-4c75-a17e-a484809c8553"   # Test #1: insmod
+  - "75483ef8-f10f-444a-bf02-62eb0e48db6f"   # Test #2: modprobe
+  - "0b996469-48c6-46e2-8155-a17f8b6c2247"   # Test #4: Diamorphine (carga del módulo)
+coverage: full
+validation_status: not_tested
+last_validated: null
+mitre:
+  tactic: "Stealth"
+  tactics:
+    - "Stealth"
+  techniques:
+    - id: T1014
+      name: "Rootkit"
+severity: Critical
+category: "Stealth"
+action: Detect
+action_description: >
+  Detecta la carga de módulos del kernel de Linux mediante insmod/modprobe y las
+  operaciones asociadas (copia de .ko a /lib/modules, depmod). Un LKM rootkit
+  (Diamorphine y similares) se instala así para hookear syscalls y ocultar
+  procesos/ficheros/conexiones. Basada en los tests Atomic Red Team T1014 #1, #2 y #4.
+scope: site
+status: Draft
+expiration: Permanent
+tags:
+  - rootkit
+  - linux
+  - lkm
+  - kernel-module
+  - diamorphine
+notes:
+  - >
+    Cubre los tres tests LKM de ART T1014: #1 "insmod <path>/T1014.ko", #2
+    "modprobe <name>" tras copiar el .ko a /lib/modules/$(uname -r)/, y #4
+    "modprobe diamorphine". insmod y modprobe son los binarios canónicos de carga
+    de módulos; su uso es legítimo (drivers), por lo que la fidelidad viene del
+    CONTEXTO: módulo desde ruta no estándar (/tmp, /home, directorio de usuario),
+    nombre de módulo sospechoso, o compilación previa (make/gcc) en la misma cadena.
+  - >
+    insmod/modprobe legítimos cargan módulos firmados desde /lib/modules. Un
+    insmod apuntando a un .ko fuera de /lib/modules (p. ej. /tmp/T1014/T1014.ko del
+    test #1) es altamente sospechoso. Considerar excluir rutas de gestores de
+    paquetes/DKMS legítimos (dkms, /var/lib/dkms) tras el baseline.
+  - >
+    Señal de máxima fidelidad para Diamorphine (test #4): el rootkit usa señales
+    "mágicas" para control (kill -31 para ocultar un PID, kill -63 para elevar).
+    Esta regla cubre la CARGA del módulo; el uso/control por señales lo cubre la
+    regla hermana "Diamorphine Magic Signal Control" (por eso el test #4 aparece
+    en ambas reglas).
+  - >
+    Verificar campos Linux en el tenant: en eventos de Linux, el binario suele ser
+    tgt.process.name y los argumentos tgt.process.cmdline. Confirmar con
+    "event.type = 'Process Creation' and endpoint.os = 'linux' | columns
+    tgt.process.name, tgt.process.cmdline | limit 20", y comprobar si endpoint.os
+    es 'linux' o 'Linux'.
+  - >
+    action Detect: la carga de módulos es operación legítima de sistema. Validar
+    baseline (qué módulos se cargan normalmente y desde dónde) antes de endurecer.
+    Un insmod/modprobe desde ruta de usuario o precedido de make/gcc es candidato
+    a Critical.
+  - >
+    Nota de solape con motor nativo: la carga de módulos de kernel es algo que el
+    motor de comportamiento de SentinelOne para Linux vigila de serie, por lo que
+    esta regla probablemente duplica parcialmente la detección nativa. Su valor es
+    la visibilidad del intento y el contexto (ruta/compilación). Marcar como
+    "duplica motor: parcial" en el índice.
+query: |
+  event.type = 'Process Creation' 
+    and endpoint.os = 'linux' 
+    and (tgt.process.name in ('insmod', 'modprobe') 
+    or tgt.process.cmdline contains:anycase ('insmod ', 'modprobe ') 
+    or (tgt.process.name = 'cp' 
+    and tgt.process.cmdline contains:anycase '/lib/modules/') 
+    or tgt.process.name = 'depmod')

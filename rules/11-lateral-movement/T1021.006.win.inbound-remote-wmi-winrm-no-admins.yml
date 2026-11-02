@@ -1,0 +1,47 @@
+name: "Lateral Movement - Inbound WinRM/WMI Connection"
+author: "GrayHats Detection Team"
+license: "AGPL-3.0-or-later"
+os: windows
+mitre:
+  tactic: "Lateral Movement"
+  techniques:
+    - id: T1021.006
+      name: "Remote Services: Windows Remote Management"
+  secondary:
+    - id: T1047
+      name: "Windows Management Instrumentation"
+      tactic: "Lateral Movement"
+severity: High
+category: "Lateral Movement"
+action: Detect
+action_description: >
+  Detecta conexiones entrantes a los puertos de WinRM (5985/5986) y WMI/DCOM
+  (135) desde orígenes no administrativos, indicando ejecución remota entrante.
+  Complementa la regla por cmdline cubriendo el caso de origen sin agente.
+scope: site
+status: Draft
+expiration: Permanent
+tags:
+  - lateral-movement
+  - winrm
+  - wmi
+  - inbound
+notes:
+  - >
+    Ángulo inbound: mira al equipo que RECIBE la ejecución remota. src.ip.address
+    es el origen remoto (potencial atacante), endpoint.name es la víctima.
+    Robusto porque no depende de cmdline y el destino suele tener agente.
+  - >
+    Puertos: 5985 (WinRM HTTP), 5986 (WinRM HTTPS), 135 (RPC endpoint mapper,
+    usado por WMI/DCOM). El 135 tiene tráfico legítimo variado; si el ruido es
+    alto, restringir a 5985/5986 para WinRM puro, que es mucho más limpio.
+  - >
+    connectionStatus = 'SUCCESS': solo sesiones establecidas. Rellenar la lista
+    src.ip.address con IPs de admin/jump hosts/servidores de gestión autorizados.
+validation_status: not_tested
+query: |
+  event.type = 'IP Connect' 
+    and event.network.direction = 'INCOMING' 
+    and dst.port.number in (5985, 5986, 135) 
+    and event.network.connectionStatus = 'SUCCESS' 
+    and !(src.ip.address in ('192.168.30.10', '192.168.30.11', '192.168.30.12'))

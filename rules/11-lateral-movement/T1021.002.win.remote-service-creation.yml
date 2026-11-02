@@ -1,0 +1,64 @@
+name: "Lateral Movement - Remote Service Creation via sc.exe"
+author: "GrayHats Detection Team"
+license: "AGPL-3.0-or-later"
+os: windows
+mitre:
+  tactic: "Lateral Movement"
+  techniques:
+    - id: T1021.002
+      name: "Remote Services: SMB/Windows Admin Shares"
+  secondary:
+    - id: T1543.003
+      name: "Create or Modify System Process: Windows Service"
+      tactic: Persistence
+severity: High
+category: "Lateral Movement"
+action: Detect
+action_description: >
+  Detecta sc.exe creando un servicio contra un host remoto (sintaxis
+  sc \\host create), patrón de movimiento lateral / ejecución remota.
+  En modo Detect inicialmente: sc.exe se lanza con frecuencia desde
+  cmd.exe/powershell.exe legítimos (RMM, instaladores, scripts), por lo
+  que se recomienda validar el ruido antes de activar KillAndQuarantine.
+scope: site
+status: Draft
+expiration: Permanent
+tags:
+  - lateral-movement
+  - sc
+  - remote-service
+notes:
+  - >
+    sc.exe con destino UNC remoto (sc \\host create ...) es un patrón de
+    creación de servicio remoto para ejecutar payloads en otra máquina.
+    La condición "create" + prefijo "\\" en la cmdline aísla el caso
+    remoto frente al "sc create" local.
+  - >
+    ALCANCE: esta regla detecta específicamente creación de servicio
+    remoto vía sc.exe. NO detecta PsExec: PsExec no invoca sc.exe, crea el
+    servicio remoto directamente vía SVCCTL/SMB (servicio PSEXESVC en el
+    destino). Para PsExec, detectar el binario psexec.exe/psexesvc.exe o la
+    creación del servicio PSEXESVC. Se retiró el tag "psexec" para no
+    inducir a error sobre lo que cubre.
+  - >
+    Considerar una regla hermana para "sc create" LOCAL (sin UNC), que es
+    T1543.003 (persistencia por servicio) y más frecuente que el caso
+    remoto. Aquí se mantiene el foco en el remoto (movimiento lateral).
+  - >
+    Se quitó la exclusión "NOT src.process.publisher = Microsoft
+    Corporation": sc.exe se lanza casi siempre desde cmd.exe o
+    powershell.exe (firmados por Microsoft), por lo que esa exclusión
+    habría anulado el caso de uso principal. Sin ella hay más superficie de
+    detección pero más ruido; validar en Detect y añadir exclusiones por
+    NOMBRE de binario/proceso padre si el RMM o herramientas de gestión
+    remota legítimas generan falsos positivos.
+  - >
+    action fijado en Detect (no KillAndQuarantine) para alinearse con la
+    recomendación de validar ruido antes de bloquear. Elevar a bloqueo solo
+    tras confirmar bajo índice de falsos positivos en el entorno.
+syntax_checked: yes
+validation_status: not_tested
+query: |
+  event.type = 'Process Creation' 
+    and tgt.process.name = 'sc.exe' and tgt.process.cmdline contains:anycase '\\\\' 
+    and tgt.process.cmdline contains:anycase 'create'

@@ -1,0 +1,74 @@
+name: "Exfiltration - Suspicious Network Connection to Uncommon Ports"
+author: "GrayHats Detection Team"
+license: "AGPL-3.0-or-later"
+os: windows
+mitre:
+  tactic: Exfiltration
+  techniques:
+    - id: T1048.003
+      name: "Exfiltration Over Alternative Protocol: Exfiltration Over Unencrypted Non-C2 Protocol"
+  secondary:
+    - id: T1071.001
+      name: "Application Layer Protocol: Web Protocols"
+      tactic: "Command and Control"
+severity: Medium
+category: Exfiltration
+action: Detect
+action_description: >
+  Detecta intérpretes del sistema y utilidades de red (PowerShell, cmd,
+  netcat/nc/ncat) estableciendo conexiones salientes a puertos no estándar
+  (> 1024), excluyendo los puertos altos legítimos habituales (3389, 8080,
+  8443), lo que puede indicar exfiltración o C2 hacia listeners en puertos
+  personalizados. En modo Detect por falsos positivos esperables con
+  aplicaciones que usan puertos altos.
+scope: site
+status: Draft
+expiration: Permanent
+tags:
+  - exfiltration
+  - network
+  - uncommon-port
+  - data-transfer
+notes:
+  - >
+    Los atacantes suelen usar netcat, sockets TCP de PowerShell o herramientas
+    propias en puertos altos. La regla monitoriza estos procesos conectándose
+    saliente a puertos > 1024 que no sean 3389 (RDP), 8080 u 8443. Los puertos
+    web y de servicio comunes (80, 443, 53, 123, 445) quedan excluidos
+    automáticamente por el filtro "> 1024".
+  - >
+    Confirmado sobre las dudas de la versión previa: (1) PowerQuery 2.0 soporta
+    comparaciones numéricas — el operador ">" es válido sobre dst.port.number.
+    (2) El campo correcto del puerto destino es dst.port.number (NO
+    tgt.network.port). (3) "in (...)" acepta la lista de puertos sin comillas
+    por ser campo numérico. (4) El tipo de evento es 'IP Connect' y la
+    dirección va en event.network.direction = 'OUTGOING'.
+  - >
+    En eventos de red, el proceso que abre la conexión es src.process (correcto
+    aquí), a diferencia de los eventos Process Creation donde el proceso lanzado
+    es tgt.process. No confundir según el tipo de evento.
+  - >
+    Se elimina la exclusión por tgt.network.dns.request: un evento IP Connect no
+    lleva poblado el dns.request (resolución DNS y conexión son eventos
+    distintos), por lo que esa condición no filtraba nada. Para excluir destinos
+    legítimos, filtrar por dst.ip.address (rangos corporativos/cloud conocidos).
+  - >
+    Mejora recomendada de fidelidad: la exfiltración es hacia destinos EXTERNOS.
+    Filtrar solo tráfico a IP pública reduce drásticamente el ruido de servicios
+    internos en puertos altos (bases de datos, middleware). Puede lograrse
+    excluyendo rangos privados en dst.ip.address, o con la función net_rfc1918
+    del Data Lake para separar interno/externo.
+  - >
+    Falsos positivos esperables con aplicaciones legítimas en puertos altos
+    (BBDD, middleware, apps corporativas). powershell.exe y cmd.exe conectando a
+    puertos altos generan volumen; validar en Detect y ajustar exclusiones por
+    proceso, puerto o IP destino antes de endurecer. netcat/nc/ncat por nombre
+    de proceso se evaden con renombrado — señal de apoyo, no definitiva.
+syntax_checked: yes
+validation_status: not_tested
+query: |
+  event.type = 'IP Connect' 
+  and event.network.direction = 'OUTGOING' 
+  and src.process.name contains:anycase ('powershell.exe', 'cmd.exe', 'netcat.exe', 'nc.exe', 'ncat.exe') 
+  and dst.port.number > 1024 
+  and !(dst.port.number in (3389, 8080, 8443))

@@ -1,0 +1,85 @@
+name: "Lateral Movement - Remote Execution via WMI or WinRM"
+author: "GrayHats Detection Team"
+license: "AGPL-3.0-or-later"
+os: windows
+mitre:
+  tactic: "Lateral Movement"
+  techniques:
+    - id: T1047
+      name: "Windows Management Instrumentation"
+  secondary:
+    - id: T1021.006
+      name: "Remote Services: Windows Remote Management"
+      tactic: "Lateral Movement"
+severity: High
+category: "Lateral Movement"
+action: Detect
+action_description: >
+  Detecta ejecución remota vía WMI o WinRM desde dos ángulos: los cmdlets/
+  herramientas en el ORIGEN (Invoke-WmiMethod, Invoke-CimMethod,
+  Invoke-Command, Enter-PSSession, New-CimSession/PSSession, wmic.exe) y los
+  procesos ejecutados remotamente en el DESTINO (hijos de WmiPrvSE.exe o
+  winrshost.exe). En Detect: Invoke-Command/New-CimSession son habituales en
+  administración legítima (RMM, scripts, monitorización); validar baseline
+  antes de bloquear.
+scope: site
+status: Draft
+expiration: Permanent
+tags:
+  - lateral-movement
+  - wmi
+  - winrm
+  - remote-execution
+notes:
+  - >
+    Dos ángulos de detección: (1) ORIGEN — cmdlets de PowerShell y wmic.exe que
+    inician ejecución remota; útil cuando el equipo que lanza tiene agente, pero
+    evadible por renombrado, ofuscación o uso de WMI directamente por API
+    (Win32_Process) sin wmic.exe. (2) DESTINO — procesos cuyo padre es
+    WmiPrvSE.exe (ejecución WMI remota) o winrshost.exe (ejecución WinRM
+    remota); es el equivalente al PSEXESVC de PsExec y muestra QUÉ se ejecutó
+    realmente de forma remota. La rama del destino es la de mayor fidelidad y
+    cubre el caso de origen sin agente.
+  - >
+    Cmdlets cubiertos: Invoke-WmiMethod y su equivalente moderno Invoke-CimMethod;
+    Invoke-Command y Enter-PSSession (ejecución/sesión remota); New-CimSession y
+    New-PSSession (establecimiento de sesión). wmic.exe cubre el binario clásico
+    (típicamente con /node: para destino remoto).
+  - >
+    Se retiró el requisito de ruta UNC ("\\") como AND obligatorio de toda la
+    condición: la sintaxis habitual de Invoke-Command/New-CimSession es
+    "-ComputerName <host>" sin backslashes, por lo que ese filtro anulaba la
+    detección de esos cmdlets (solo habría quedado wmic.exe con UNC explícito).
+  - >
+    ATENCIÓN a la exclusión de SYSTEM: WMI/WinRM remoto se ejecuta con frecuencia
+    en contexto SYSTEM en el DESTINO (los servicios WmiPrvSE/WinRM corren como
+    SYSTEM), por lo que "!(src.process.user contains 'SYSTEM')" puede CEGAR la
+    rama del destino (hijos de wmiprvse/winrshost, que suelen ser SYSTEM). La
+    exclusión se ha RETIRADO de la regla por ese motivo; controlar el ruido por
+    IP de origen de admin/jump hosts o por proceso padre legítimo en su lugar.
+    Si se quiere mantener el filtrado de cuentas de sistema, aplicarlo solo a la
+    rama de cmdlets del origen, no a toda la query.
+  - >
+    Ángulo INBOUND (regla hermana, tipo de evento distinto — va en STAR aparte):
+    detectar conexiones entrantes a los puertos de WinRM (5985/5986) y WMI/DCOM
+    (135). Es robusto porque no depende de cmdline y el destino suele tener
+    agente aunque el origen no. El puerto 135 (RPC endpoint mapper) genera algo
+    de ruido; para máxima limpieza, restringir a 5985/5986 (WinRM puro).
+  - >
+    Falsos positivos esperables: administración legítima (RMM, orquestación,
+    scripts de gestión, SCCM). Validar en Detect, construir baseline y excluir
+    por origen/proceso padre antes de endurecer. wmic.exe y los cmdlets por
+    nombre se evaden con renombrado — señal de apoyo, no definitiva; la rama del
+    destino (wmiprvse/winrshost como padre) es la fiable.
+  - >
+    action fijado en Detect (no KillAndQuarantine): los binarios responsables son
+    powershell.exe/wmic.exe, herramientas firmadas del sistema que no deben
+    ponerse en cuarentena, y el bloqueo automático rompería administración
+    legítima. Elevar a bloqueo solo tras confirmar bajo índice de FP.
+syntax_checked: yes
+validation_status: not_tested
+query: |
+  event.type = 'Process Creation' 
+    and (tgt.process.cmdline contains:anycase ('Invoke-WmiMethod', 'Invoke-CimMethod', 'Invoke-Command', 'Enter-PSSession', 'New-CimSession', 'New-PSSession') 
+      or tgt.process.name = 'wmic.exe' 
+      or src.process.name contains:anycase ('wmiprvse.exe', 'winrshost.exe'))

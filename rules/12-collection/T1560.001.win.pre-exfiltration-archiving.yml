@@ -1,0 +1,65 @@
+name: "Exfiltration - Suspicious Archiving Activity for Data Staging"
+author: "GrayHats Detection Team"
+license: "AGPL-3.0-or-later"
+os: windows
+mitre:
+  tactic: Collection
+  techniques:
+    - id: T1560.001
+      name: "Archive Collected Data: Archive via Utility"
+    - id: T1074.001
+      name: "Data Staged: Local Data Staging"
+severity: Medium
+category: Exfiltration
+action: Detect
+action_description: >
+  Detecta el uso de herramientas de compresión (7z, WinRAR, PowerShell
+  Compress-Archive) desde procesos no estándar o en rutas de usuario,
+  lo que puede indicar preparación de datos para exfiltración.
+scope: site
+status: Draft
+expiration: Permanent
+tags:
+  - exfiltration
+  - staging
+  - compression
+  - archive
+  - 7zip
+notes:
+  - >
+    Movida de rules/exfiltration/ a rules/collection/: T1560.001
+    (Archive Collected Data) y T1074.001 (Data Staged) son técnicas de
+    la táctica Collection en MITRE ATT&CK, aunque el objetivo final sea
+    la exfiltración — el archivo debe vivir en la carpeta que coincide
+    con mitre.tactic, no con el propósito final de la actividad.
+  - >
+    Los atacantes usan 7z.exe, WinRAR o Compress-Archive de PowerShell
+    para empaquetar datos antes de exfiltrarlos. Argumentos como "-p"
+    (contraseña) o "-mx9" (máxima compresión) son típicos.
+  - >
+    La presencia de rutas como C:\Users\, C:\ProgramData\ o C:\Temp\
+    en el comando aumenta la sospecha, ya que son ubicaciones de
+    staging comunes.
+  - >
+    Validar en Detect: muchas herramientas legítimas de backup usan
+    compresión. Excluir rutas de software de backup corporativo.
+  - >
+    Se quitó la exclusión "NOT src.process.publisher = Microsoft
+    Corporation": 7z.exe/WinRAR/powershell.exe se lanzan habitualmente
+    desde explorer.exe o cmd.exe/powershell.exe (firmados por
+    Microsoft), así que esa exclusión anulaba buena parte de la
+    detección real.
+validation_status: not_tested
+query: |
+  event.type = "Process Creation"
+  AND (
+      tgt.process.name contains:anycase ("7z.exe", "7za.exe", "rar.exe", "winrar.exe")
+      OR (
+          tgt.process.name = "powershell.exe"
+          AND tgt.process.cmdline contains:anycase "Compress-Archive"
+      )
+  )
+  AND tgt.process.cmdline contains:anycase ("-p", "-m", ".zip", ".7z", ".rar", ".tar")
+  AND (
+      tgt.process.cmdline contains:anycase ("C:\\Users\\", "C:\\ProgramData\\", "C:\\Temp\\", "C:\\Windows\\Temp\\")
+  )

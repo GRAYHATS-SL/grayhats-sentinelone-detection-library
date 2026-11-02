@@ -1,0 +1,47 @@
+name: "Credential Access - LSASS Memory Dump via Suspicious Tool"
+author: "GrayHats Detection Team"
+license: "AGPL-3.0-or-later"
+os: windows
+mitre:
+  tactic: "Credential Access"
+  techniques:
+    - id: T1003.001
+      name: "OS Credential Dumping: LSASS Memory"
+severity: Critical
+category: "Credential Access"
+action: KillAndQuarantine
+action_description: >
+  Se ha otorgado un handle con permisos de lectura al proceso lsass.exe. Posible volcado de credenciales.
+scope: site
+status: Draft
+expiration: Permanent
+tags:
+  - credential-access
+  - lsass
+  - mimikatz
+  - procdump
+  - dump
+notes:
+  - >
+    Esta regla no cubre el volcado de credenciales usando la herramienta MimiKatz. Este evento se cubre en una regla aparte.
+
+art_test: true 
+tests_included: [1, 2, 3, 7, 8, 11, 12, 13]
+test_guids:
+  - "0be2230c-9ab3-4ac2-8826-3199b9a0ebf8"   # Test 1: Dump LSASS.exe Memory using ProcDump
+  - "2536dee2-12fb-459a-8c37-971844fa73be"   # Test 2: Dump LSASS.exe Memory using comsvcs.dll
+  - "7ae7102c-a099-45c8-b985-4c7a2d05790d"   # Test 3: Dump LSASS.exe Memory using direct system calls and API unhooking
+  - "c37bc535-5c62-4195-9cc3-0517673171d8"   # Test 7: LSASS read with pypykatz
+  - "6502c8f0-b775-4dbd-9193-1298f56b6781"   # Test 8: Dump LSASS.exe Memory using Out-Minidump.ps1
+  - "9d0072c8-7cca-45c4-bd14-f852cfa35cf0"   # Test 11: Dump LSASS with createdump.exe from .Net v5
+  - "86fc3f40-237f-4701-b155-81c01c48d697"   # Test 12: Dump LSASS.exe using imported Microsoft DLLs
+  - "47a539d1-61b9-4364-bf49-a68bc2a95ef0"   # Test 13: Dump LSASS.exe using lolbin rdrleakdiag.exe
+
+coverage: full
+validation_status: validated
+last_validated: "2026-10-14"
+query: |
+  event.type = 'Open Remote Process Handle'
+  AND endpoint.os = 'windows' 
+  AND tgt.process.name='lsass.exe'
+  and tgt.process.accessRights in ('1053818', '2097151', '2047999')

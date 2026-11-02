@@ -1,0 +1,50 @@
+name: "Command and Control - Ambiguous C2 Framework Strings (Contextual)"
+author: "GrayHats Detection Team"
+license: "AGPL-3.0-or-later"
+os: windows
+mitre:
+  tactic: "Command and Control"
+  techniques:
+    - id: T1071.001
+      name: "Application Layer Protocol: Web Protocols"
+severity: High
+category: "Command and Control"
+action: Detect
+action_description: >
+  Detecta nombres de frameworks C2 que también son palabras comunes o nombres
+  de producto legítimo (empire, sliver, grunt, ninja, apollo, athena, merlin,
+  havoc, mythic, covenant), PERO solo cuando aparecen en la cmdline de un
+  intérprete/LOLBin sospechoso. El anclaje al proceso reduce el altísimo ruido
+  de estas cadenas. NUNCA en KillAndQuarantine por el riesgo de falso positivo.
+scope: site
+status: Draft
+expiration: Permanent
+tags:
+  - command-and-control
+  - c2
+  - contextual
+  - low-confidence
+notes:
+  - >
+    Estas cadenas son nombres reales de frameworks C2 (Empire, Sliver, Covenant,
+    Havoc, Mythic con sus agentes Apollo/Athena/Merlin, Brute Ratel...) pero
+    también software legítimo omnipresente: "grunt" es un task runner de
+    JavaScript, "ninja" un sistema de build C++, "apollo" un cliente GraphQL,
+    "athena" un servicio de AWS, "empire" aparece en incontables productos. Un
+    contains sobre estas palabras sin contexto es inservible por FP.
+  - >
+    Mitigación del ruido: se exige que el proceso que ejecuta sea un
+    intérprete/LOLBin (powershell, cmd, rundll32, regsvr32, wscript, cscript,
+    mshta). "grunt" desde node.exe es un build legítimo; "grunt" desde rundll32
+    es sospechoso. Aun con este anclaje, es señal de INVESTIGACIÓN, no de
+    bloqueo: de ahí action Detect obligatorio.
+  - >
+    Ajustar la lista al entorno: si el cliente usa alguna de estas herramientas
+    legítimamente (p. ej. desarrollo con grunt/ninja/apollo), retirar esa cadena
+    concreta o excluir sus rutas/procesos padre para no generar ruido constante.
+syntax_checked: yes
+validation_status: not_tested
+query: |
+  event.type = 'Process Creation' 
+    and tgt.process.cmdline contains:anycase ('sliver', 'empire', 'covenant', 'grunt', 'apollo', 'athena', 'merlin', 'havoc', 'mythic', 'ninja') 
+    and src.process.name in ('powershell.exe', 'pwsh.exe', 'cmd.exe', 'rundll32.exe', 'regsvr32.exe', 'wscript.exe', 'cscript.exe', 'mshta.exe')

@@ -1,0 +1,76 @@
+# T1014.lnx.ld-so-preload-hijack.yml
+name: "Rootkit - Linux Dynamic Linker Preload (ld.so.preload Hijack)"
+author: "GrayHats Detection Team"
+license: "AGPL-3.0-or-later"
+os: linux
+art_test: yes
+art_technique: T1014
+tests_included: [3]
+test_guids:
+  - "1338bf0c-fd0c-48c0-9e65-329f18e2c0d3"   # Test #3: libprocesshider / ld.so.preload
+coverage: full
+validation_status: not_tested
+last_validated: null
+mitre:
+  tactic: "Stealth"
+  tactics:
+    - "Stealth"
+    - "Persistence"
+    - "Privilege Escalation"
+  techniques:
+    - id: T1014
+      name: "Rootkit"
+  secondary:
+    - id: T1574.006
+      name: "Hijack Execution Flow: Dynamic Linker Hijacking"
+      tactic: "Persistence"
+severity: Critical
+category: "Stealth"
+action: Detect
+action_description: >
+  Detecta la modificación de /etc/ld.so.preload, mecanismo abusado por rootkits de
+  espacio de usuario (libprocesshider y similares) para inyectar una librería en
+  todos los procesos y hookear funciones libc (readdir, etc.) para ocultar
+  procesos/ficheros. Basada en el test Atomic Red Team T1014 #3.
+scope: site
+status: Draft
+expiration: Permanent
+tags:
+  - rootkit
+  - linux
+  - ld-preload
+  - libprocesshider
+  - dynamic-linker
+notes:
+  - >
+    Cubre el test #3 de ART T1014: "echo <lib.so> | tee -a /etc/ld.so.preload".
+    /etc/ld.so.preload fuerza la precarga de una librería en TODO proceso que
+    arranca, permitiendo hookear libc para ocultar el rootkit. Su modificación es
+    rarísima en sistemas legítimos: casi cualquier escritura sobre este fichero es
+    sospechosa.
+  - >
+    Dos ángulos: (1) por comando — tee/echo/sed apuntando a /etc/ld.so.preload; (2)
+    por evento de fichero — cualquier File Modification/Create sobre
+    /etc/ld.so.preload (regla hermana, más robusta: caza también editores y
+    redirecciones que no usen tee). El ángulo de fichero es el preferente.
+  - >
+    Altísima fidelidad y muy bajo ruido: /etc/ld.so.preload no suele existir
+    siquiera en un sistema limpio. Candidata a Critical + contención casi directa.
+    Excepción rara: algún software de seguridad/APM legítimo lo usa (p. ej. ciertos
+    agentes) — validar en el entorno concreto.
+  - >
+    Cruce de tácticas: aunque T1014 se cataloga oficialmente como Defense Evasion,
+    la subtécnica T1574.006 (Dynamic Linker Hijacking) está mapeada por MITRE
+    también a Persistence (la librería se carga en cada arranque de proceso) y a
+    Privilege Escalation (corre en el contexto de cada proceso que la carga). De
+    ahí el bloque tactics con las tres.
+  - >
+    Verificar campos: para el ángulo de fichero, confirmar event.type
+    ('File Modification'/'File Creation') y el campo de ruta (tgt.file.path) en
+    Linux. Para el ángulo de comando, confirmar tgt.process.name/cmdline y el valor
+    de endpoint.os ('linux' vs 'Linux').
+query: |
+  event.type = 'Process Creation' 
+    and endpoint.os = 'linux' 
+    and tgt.process.cmdline contains:anycase 'ld.so.preload' 
+    and tgt.process.name in ('tee', 'bash', 'sh', 'sed', 'vi', 'vim', 'nano', 'echo', 'dd', 'cp')

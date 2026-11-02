@@ -1,0 +1,63 @@
+name: "Command and Control - Cobalt Strike Named Pipe Pattern"
+author: "GrayHats Detection Team"
+license: "AGPL-3.0-or-later"
+os: windows
+mitre:
+  tactic: "Command and Control"
+  techniques:
+    - id: T1071.001
+      name: "Application Layer Protocol: Web Protocols"
+  secondary:
+    - id: T1055
+      name: "Process Injection"
+      tactic: "Defense Evasion"
+severity: Critical
+category: "Command and Control"
+action: Detect
+action_description: >
+  Detecta la creación de named pipes con patrones característicos de Cobalt
+  Strike (msagent_, postex_, status_, MSSE-, etc.), usados para comunicación
+  entre el beacon inyectado y sus módulos post-explotación. A diferencia de la
+  detección por cadenas en cmdline, esto SÍ caza un Cobalt Strike operado
+  correctamente (inyectado en memoria, sin nombre identificativo en línea de
+  comandos).
+scope: site
+status: Draft
+expiration: Permanent
+tags:
+  - command-and-control
+  - c2
+  - cobaltstrike
+  - named-pipe
+  - high-fidelity
+notes:
+  - >
+    Por qué es de alta fidelidad: un Cobalt Strike bien desplegado no deja
+    cadenas en la cmdline (corre inyectado), pero SÍ crea named pipes con
+    patrones por defecto de sus perfiles Malleable C2 y de sus jobs de
+    post-explotación (SMB beacon, ejecución de comandos, etc.). Estos pipes son
+    difíciles de evitar sin reconfigurar el perfil.
+  - >
+    Patrones cubiertos (por defecto de Cobalt Strike y perfiles comunes):
+    msagent_####, postex_####, postex_ssh_####, status_####, MSSE-####-server,
+    y el patrón \\.\pipe\ con esos prefijos. Los operadores avanzados
+    personalizan los nombres de pipe en el perfil Malleable, por lo que esta
+    regla se evade con configuración a medida — combinar con beaconing y
+    detección de inyección.
+  - >
+    VERIFICAR el tipo de evento y campo en el esquema del tenant: la telemetría
+    de named pipes puede venir como event.type 'Named Pipe Creation' /
+    'Pipe Connection' o similar, con el nombre en un campo como
+    named_pipe.name / event.namedPipe.name / tgt.namedPipe.name. Ajustar el
+    campo tras confirmarlo en Event Search (buscar eventos de pipe y ver el
+    nombre del campo). La query siguiente asume named.pipe.name como marcador.
+  - >
+    action en Detect inicialmente pese a la alta fidelidad: confirmar primero
+    que el patrón no colisiona con named pipes legítimos del entorno (algún
+    software usa prefijos con guiones bajos y números). Elevar a Critical +
+    contención tras validar.
+syntax_checked: yes
+validation_status: not_tested
+query: |
+  event.type = 'Named Pipe Creation' 
+  and (named.pipe.name matches '(?i).*(msagent|postex|status)_[0-9a-f]+.*' or named.pipe.name contains:anycase ('postex_ssh_', 'MSSE-'))

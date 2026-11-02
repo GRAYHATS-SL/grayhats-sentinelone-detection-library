@@ -1,0 +1,52 @@
+name: "Ransomware - Process Encrypting Files on Mapped Network Drive"
+author: "GrayHats Detection Team"
+license: "AGPL-3.0-or-later"
+os: windows
+mitre:
+  tactic: Impact
+  techniques:
+    - id: T1486
+      name: Data Encrypted for Impact
+severity: Critical
+category: Ransomware
+action: KillAndQuarantine
+action_description: >
+  Mata el proceso ransomware localmente y pone en cuarentena su binario.
+scope: site
+status: Draft
+expiration: Permanent
+tags:
+  - ransomware
+  - network-share
+  - mapped-drive
+  - client-side
+notes:
+  - >
+    Complementaria de rules/impact/network-share-mass-encryption.yml (esa
+    corre en el servidor de archivos; esta corre en la máquina
+    cliente/atacante, por eso aquí sí se puede identificar y matar el
+    proceso real).
+  - >
+    event.type incluye "File Rename" por el mismo motivo que en la regla
+    del servidor: el cambio de extensión es casi siempre un renombrado,
+    no una modificación in-place.
+  - >
+    "Z:" e "Y:" son ejemplo de letras de unidad mapeadas: ajústalas a tu
+    convención real de mapeo de red. Cuidado si alguna de esas letras
+    puede estar asignada a un disco local (USB, partición) en lugar de a
+    un recurso de red en algún equipo del parque.
+  - >
+    La exclusión es por NOMBRE de binario legítimo conocido (agente de
+    sync/backup), no por publisher: excluir por "Microsoft Corporation"
+    volvería a descartar cmd.exe y powershell.exe, y dejaría totalmente
+    ciega la regla frente a ransomware "fileless" que cifra directamente
+    desde un script de PowerShell sin binario propio. Personaliza la
+    lista con los procesos de sync/backup reales de tu entorno (ejemplo:
+    OneDrive.exe).
+syntax_checked: yes
+validation_status: not_tested
+query: |
+  event.type in ('File Modification', 'File Rename') 
+    and (tgt.file.path contains:anycase 'Z:\\' or tgt.file.path contains:anycase 'Y:\\' or tgt.file.path contains:anycase '\\\\')
+    and tgt.file.extension in ('encrypted', 'lockbit', 'crypt', 'locked', 'crab', 'xxx', 'zzz')
+    and !(src.process.name in ('OneDrive.exe'))

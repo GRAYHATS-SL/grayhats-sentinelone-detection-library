@@ -1,0 +1,57 @@
+name: "Lateral Movement - Inbound RDP to Critical Asset"
+author: "GrayHats Detection Team"
+license: "AGPL-3.0-or-later"
+os: windows
+mitre:
+  tactic: "Lateral Movement"
+  techniques:
+    - id: T1021.001
+      name: "Remote Services: Remote Desktop Protocol"
+severity: High
+category: "Lateral Movement"
+action: Detect
+action_description: >
+  Detecta sesiones RDP entrantes (puerto 3389) hacia activos críticos
+  (controladores de dominio, servidores sensibles) desde orígenes fuera de
+  la lista de administradores autorizados. Vigilancia dirigida de los
+  destinos de mayor valor para el atacante.
+scope: site
+status: Draft
+expiration: Permanent
+tags:
+  - lateral-movement
+  - rdp
+  - inbound
+  - critical-asset
+notes:
+  - >
+    Ángulo inverso a la variante de workstations: aquí el destino SÍ recibe
+    RDP legítimamente (son servidores), por lo que la precisión viene de una
+    lista ESTRICTA de orígenes autorizados. Cualquier RDP a un DC/servidor
+    crítico desde una IP no aprobada es sospechoso, sea admin o no.
+  - >
+    Semántica src/dst: direction = 'INCOMING' → src.ip.address es el origen
+    remoto, endpoint.name es el activo crítico que recibe. La condición
+    endpoint.name restringe el DESTINO a los activos vigilados; la exclusión
+    src.ip.address define los orígenes autorizados.
+  - >
+    Personalizar: ajustar endpoint.name a la nomenclatura real de los activos
+    críticos (DCs, servidores de aplicación sensibles) y mantener la lista de
+    src.ip.address autorizados lo más corta y controlada posible — esta regla
+    vale justamente por lo estricto de esa allowlist. Considerar reforzarla con
+    la cuenta usada (src.process.user) si hay cuentas administrativas concretas
+    que deban ser las únicas en hacer RDP a estos activos.
+  - >
+    Prioridad DFIR: RDP entrante no autorizado a un controlador de dominio es
+    de las señales más críticas de la cadena de ataque (paso previo a
+    compromiso de dominio). Candidata a elevar a Critical y a respuesta de
+    contención una vez validado el baseline de orígenes legítimos.
+syntax_checked: yes
+validation_status: not_tested
+query: |
+  event.type = 'IP Connect' 
+    and event.network.direction = 'INCOMING' 
+    and dst.port.number = 3389 
+    and event.network.connectionStatus = 'SUCCESS' 
+    and endpoint.name contains:anycase ('dc', 'srv-critico') 
+    and !(src.ip.address in ('192.168.30.10', '192.168.30.11', '192.168.30.12'))

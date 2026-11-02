@@ -1,0 +1,42 @@
+name: "Office Application Spawns Script Interpreter or LOLBin"
+author: "GrayHats Detection Team"
+license: "AGPL-3.0-or-later"
+os: windows
+mitre:
+  tactic: Execution
+  techniques:
+    - id: T1204.002
+      name: "User Execution: Malicious File"
+  secondary:
+    - id: T1566.001
+      name: "Phishing: Spearphishing Attachment"
+      tactic: Initial Access
+severity: Critical
+category: Phishing
+action: Kill
+action_description: >
+  Mata la cadena de procesos: el hijo malicioso (tgt.process) y, según cómo se
+  configure la respuesta en consola, el proceso de Office padre. Es una acción
+  agresiva; ver notes sobre el riesgo de matar el proceso de Office con
+  documentos sin guardar.
+scope: site
+status: Draft
+expiration: Permanent
+tags:
+  - office-macro
+  - living-off-the-land
+  - download-cradle
+  - phishing
+notes:
+  - >
+    Detecta el patrón de ejecución vía macro: una aplicación de Office
+    (src.process) lanza como hijo (tgt.process) un intérprete de scripts
+    o LOLBin de descarga/ejecución. Office no tiene motivo legítimo para
+    esto en la práctica totalidad de los casos.
+art_test: false
+syntax_checked: true
+validation_status: not_tested
+query: |
+  event.type = "Process Creation"
+  AND src.process.name in:anycase ("winword.exe", "excel.exe", "powerpnt.exe", "outlook.exe", "mspub.exe", "visio.exe", "onenote.exe", "msaccess.exe")
+  AND tgt.process.name in:anycase ("powershell.exe", "pwsh.exe", "cmd.exe", "wscript.exe", "cscript.exe", "mshta.exe", "regsvr32.exe", "rundll32.exe", "certutil.exe", "bitsadmin.exe")

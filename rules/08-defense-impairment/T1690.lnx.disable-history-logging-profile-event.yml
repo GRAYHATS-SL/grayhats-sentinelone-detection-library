@@ -1,0 +1,73 @@
+# T1070.003.lnx.disable-history-logging-profile-event.yml
+name: "Defense Evasion - History Logging Disabled via Shell Profile (File Event)"
+author: "GrayHats Detection Team"
+license: "AGPL-3.0-or-later"
+os: linux
+art_test: yes
+art_technique: T1070.003
+tests_included: [7]
+test_guids:
+  - "784e4011-bd1a-4ecd-a63a-8feb278512e6"   # Test #7: set +o history en ~/.bashrc
+coverage: partial   # cubre la persistencia en perfil (#7), no la desactivación en sesión (#6)
+validation_status: not_tested
+last_validated: null
+mitre:
+  tactic: "Defense Impairment"
+  tactics:
+    - "Defense Impairment"
+    - "Persistence"
+  techniques:
+    - id: T1690
+      name: "Prevent Command History Logging"
+  secondary:
+    - id: T1546.004
+      name: "Event Triggered Execution: Unix Shell Configuration Modification"
+      tactic: "Persistence"
+severity: High
+category: "Defense Impairment"
+action: Detect
+action_description: >
+  Detecta por EVENTO DE FICHERO la modificación de los ficheros de configuración de
+  shell (~/.bashrc, ~/.bash_profile, ~/.profile, ~/.zshrc) para deshabilitar de
+  forma persistente el registro de historial ("set +o history", unset HISTFILE).
+  Complementa la regla por comando, que depende de capturar builtins del shell.
+  Basada en el test ART T1070.003 #7.
+scope: site
+status: Draft
+expiration: Permanent
+tags:
+  - defense-evasion
+  - linux
+  - disable-history
+  - bashrc
+  - persistence
+  - file-event
+notes:
+  - >
+    Ángulo de fichero para el #7: la modificación de .bashrc para añadir "set +o
+    history" es persistente (afecta a toda sesión futura) y anti-forense
+    deliberado. Observarlo como File Modification sobre el perfil es más robusto que
+    depender de capturar el builtin "set" en la cmdline.
+  - >
+    coverage=partial: cubre solo la persistencia en perfil (#7). La desactivación en
+    la sesión actual (#6: unset HISTFILE, HISTFILESIZE=0, history -c) NO deja huella
+    en fichero y solo se ve por la cmdline del shell (regla por comando). Por eso #6
+    no está en test_guids de esta regla.
+  - >
+    Cruce de tácticas: modificar .bashrc es también T1546.004 (Unix Shell
+    Configuration Modification), una técnica de Persistence. La misma modificación
+    puede servir para persistir ejecución Y para deshabilitar historial; de ahí el
+    mapeo doble.
+  - >
+    LIMITACIÓN: esta regla dispara ante CUALQUIER modificación del perfil, no solo
+    las que deshabilitan historial (el evento de fichero no ve el contenido escrito).
+    Genera ruido con cambios legítimos de .bashrc (instalación de software, cambios
+    de PATH, etc.). Si el tenant expone el contenido/diff escrito, filtrar por "set
+    +o history"/"HISTFILE"; si no, esta regla es mejor como HUNTING que como STAR, o
+    correlacionar con la regla por comando en la misma ventana.
+  - >
+    Verificar event.type de fichero y campo de ruta en Linux.
+query: |
+  event.type in ('File Modification', 'File Creation') 
+    and endpoint.os = 'linux' 
+    and tgt.file.path matches '(?i).*/\.(bashrc|bash_profile|profile|zshrc|bash_login)$'

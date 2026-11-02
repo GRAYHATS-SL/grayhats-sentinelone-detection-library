@@ -1,0 +1,51 @@
+name: "Ransomware - Delete Volume Shadow Copies via vssadmin"
+author: "GrayHats Detection Team"
+license: "AGPL-3.0-or-later"
+os: windows
+mitre:
+  tactic: Impact
+  techniques:
+    - id: T1490
+      name: Inhibit System Recovery
+severity: Critical
+category: Ransomware
+action: KillAndQuarantine
+action_description: >
+  Mata al proceso padre (el ransomware) y al hijo (vssadmin).
+scope: site
+status: Draft
+expiration: Permanent
+tags:
+  - ransomware
+  - shadow-copy
+  - inhibit-recovery
+notes:
+  - >
+    La exclusión sigue siendo por NOMBRE de binario legítimo conocido, no
+    por publisher: excluir por publisher habría descartado también
+    cmd.exe y powershell.exe (firmados por Microsoft), la vía de
+    invocación más habitual tanto de scripts legítimos como de
+    ransomware real.
+  - >
+    AJUSTA la lista de src.process.name a los binarios reales de tu
+    RMM/backup (los de ejemplo son orientativos, verifícalos).
+  - >
+    PENDIENTE: la versión anterior exigía además, en el caso de "resize
+    shadowstorage", que el tamaño objetivo fuera irrisorio (regex sobre
+    /maxsize=). No tengo confirmado el operador de regex/matches en S1QL
+    2.0, así que de momento cualquier "resize shadowstorage" dispara sin
+    ese filtro. Confirmar el operador y reintroducir la restricción de
+    tamaño.
+syntax_checked: yes
+validation_status: not_tested
+query: |
+  event.type = "Process Creation"
+  AND tgt.process.cmdline contains:anycase "vssadmin.exe"
+  AND (
+      tgt.process.cmdline contains:anycase "delete shadows"
+      OR tgt.process.cmdline contains:anycase "resize shadowstorage"
+  )
+  AND NOT (
+      src.process.name = "wbengine.exe"
+      OR src.process.name = "vdsldr.exe"
+  )

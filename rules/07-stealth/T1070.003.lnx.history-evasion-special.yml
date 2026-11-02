@@ -1,0 +1,67 @@
+# T1070.003.lnx.history-evasion-special.yml
+name: "Defense Evasion - Shell History Evasion (SSH -T and Docker Log Clearing)"
+author: "GrayHats Detection Team"
+license: "AGPL-3.0-or-later"
+os: linux
+art_test: yes
+art_technique: T1070.003
+tests_included: [9, 10]
+test_guids:
+  - "5f8abd62-f615-43c5-b6be-f780f25790a1"   # Test #9: ssh -T (sin TTY, evita lastlog/wtmp)
+  - "553b39f9-1e8c-47b1-abf5-8daf7b0391e9"   # Test #10: truncate logs de Docker
+coverage: full
+validation_status: not_tested
+last_validated: null
+mitre:
+  tactic: "Stealth"
+  tactics:
+    - "Stealth"
+  techniques:
+    - id: T1070.003
+      name: "Indicator Removal on Host: Clear Command History"
+severity: Medium
+category: "Stealth"
+action: Detect
+action_description: >
+  Detecta dos técnicas específicas de evasión de rastro: (1) ssh -T, que evita
+  asignar un TTY para no quedar registrado en lastlog/wtmp/btmp; (2) truncado de
+  los logs JSON de contenedores Docker en /var/lib/docker/containers. Basada en
+  los tests ART T1070.003 #9 y #10.
+scope: site
+status: Draft
+expiration: Permanent
+tags:
+  - defense-evasion
+  - linux
+  - ssh
+  - docker
+  - anti-forensics
+notes:
+  - >
+    Test #9 (ssh -T): el flag -T impide la asignación de pseudo-TTY, lo que evita
+    que la sesión quede en lastlog/wtmp. OJO con los falsos positivos: ssh -T tiene
+    usos legítimos MUY comunes (git sobre ssh usa -T; "ssh -T git@github.com" es
+    rutina). Por eso se ancla a que el -T vaya con la ejecución de un comando
+    remoto sospechoso o se deja en Medium; en muchos entornos conviene MOVER el #9
+    a hunting en vez de STAR por su ruido.
+  - >
+    Test #10 (Docker logs): "truncate -s 0 /var/lib/docker/containers/.../*.log" y
+    "docker container prune" borran evidencia de actividad en contenedores. El
+    truncado de ficheros *-json.log en /var/lib/docker es la firma fiable; docker
+    prune es más ambiguo (mantenimiento legítimo).
+  - >
+    Estas dos técnicas son heterogéneas (una es SSH, otra Docker); se agrupan por
+    pertenecer al mismo test ART pero podrían separarse en dos reglas si se quiere
+    granularidad. Se mantienen juntas por trazabilidad con el test.
+  - >
+    Severidad Medium por el ruido de ssh -T. El truncado de logs de Docker sí es de
+    mayor confianza; si se separan, esa rama subiría a High.
+  - >
+    Verificar campos Linux y captura de la cmdline completa (incluidos los globs de
+    ruta de Docker).
+query: |
+  event.type = 'Process Creation' 
+  and endpoint.os = 'linux' 
+  and ((tgt.process.name = 'ssh' 
+  and tgt.process.cmdline matches '(?i).*ssh\s+.*-T\b.*') 
+  or (tgt.process.name = 'truncate' and tgt.process.cmdline contains:anycase '/var/lib/docker/containers'))

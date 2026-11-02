@@ -1,0 +1,71 @@
+name: "Command and Control - External IP Connection from LOLBin or Interpreter"
+author: "GrayHats Detection Team"
+license: "AGPL-3.0-or-later"
+os: windows
+mitre:
+  tactic: "Command and Control"
+  techniques:
+    - id: T1071.001
+      name: "Application Layer Protocol: Web Protocols"
+severity: High
+category: "Command and Control"
+action: Detect
+action_description: >
+  Detecta intérpretes del sistema y LOLBins (PowerShell, wscript/cscript,
+  mshta, rundll32, regsvr32, msbuild, installutil) estableciendo conexiones
+  salientes a direcciones IP públicas. Estos binarios rara vez tienen motivo
+  legítimo para conectar directamente a Internet, por lo que la conexión a
+  IP externa es una señal de C2 o descarga de payload. En Detect por posibles
+  usos legítimos (PowerShell contra APIs); validar baseline antes de bloquear.
+scope: site
+status: Draft
+expiration: Permanent
+tags:
+  - command-and-control
+  - c2
+  - lolbin
+  - external-ip
+notes:
+  - >
+    ALCANCE HONESTO: esta regla detecta "LOLBin/intérprete conectando a IP
+    pública", NO "conexión sin resolución DNS previa". El check original
+    "!(dns.request=*)" se retiró porque un evento IP Connect no lleva poblado
+    dns.request (resolución y conexión son eventos distintos): ese campo está
+    SIEMPRE vacío en un IP Connect, así que el check no discriminaba nada. El
+    "sin DNS previo" NO es verificable en un único evento con los campos
+    conocidos; se detecta por CORRELACIÓN en hunting (ver query hermana). El
+    tag "no-dns" se traslada a esa query, que es la que de verdad lo comprueba.
+  - >
+    La detección se basa en la combinación proceso + destino externo, que es
+    señal válida por sí sola. rundll32.exe, regsvr32.exe, mshta.exe o
+    wscript/cscript conectando a una IP pública es altamente sospechoso (raro en
+    uso legítimo). powershell.exe/pwsh.exe es más ruidoso (APIs REST legítimas),
+    por lo que puede convenir separarlo en una severidad distinta o excluir sus
+    destinos de API conocidos tras el baseline.
+  - >
+    Se retiró cmd.exe de la lista: rara vez abre conexiones de red directas
+    (lanza otros procesos que sí lo hacen), aportaba ruido sin señal. Se
+    añadieron msbuild.exe e installutil.exe (LOLBins de ejecución/compilación
+    usados para C2 y bypass de AWL).
+  - >
+    Campos confirmados por pruebas en otras reglas del repo: event.type =
+    'IP Connect', event.network.direction, dst.ip.address. La exclusión de IPs
+    privadas usa la regex anclada (^) confirmada en win-rdp-outbound.yml, que
+    cubre 10/8, 172.16/12 y 192.168/16 sin falsos positivos por substring (a
+    diferencia de "contains '10.'", que casaría IPs públicas como 8.35.10.5).
+    En el operador matches el regex va con barra simple (\.).
+  - >
+    Se retiró la técnica secundaria T1090.003 (Multi-hop Proxy): la regla no
+    detecta encadenamiento de proxies, solo conexión directa a IP. Si se combina
+    con puerto no estándar, considerar añadir T1571 (Non-Standard Port).
+  - >
+    Falsos positivos: aplicaciones legítimas que conectan por IP (BBDD,
+    middleware) y PowerShell contra APIs. Validar en Detect; excluir por proceso
+    o por rango de IP de destino legítimo (cloud corporativo) tras el baseline.
+syntax_checked: yes
+validation_status: not_tested
+query: |
+  event.type = 'IP Connect' 
+    and event.network.direction = 'OUTGOING' 
+    and !(dst.ip.address matches '^(127\.0\.0\.1|192\.168\.|172\.(1[6-9]|2[0-9]|3[01])\.)') 
+    and src.process.name contains:anycase ('powershell.exe', 'pwsh.exe', 'wscript.exe', 'cscript.exe', 'mshta.exe', 'rundll32.exe', 'regsvr32.exe', 'msbuild.exe', 'installutil.exe')

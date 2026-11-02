@@ -1,0 +1,183 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "SentinelOne STAR Rule",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["name", "author", "license", "os", "mitre", "severity", "category", "action", "scope", "status", "expiration", "query", "validation_status"],
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Nombre de la regla, igual al que se usa en el campo Name de la consola"
+    },
+    "author": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Autor o equipo responsable de la regla"
+    },
+    "license": {
+      "type": "string",
+      "enum": ["AGPL-3.0-or-later"],
+      "description": "Licencia del proyecto (identificador SPDX). Fijada a un único valor a propósito: todo el repo se publica bajo AGPL-3.0-or-later (ver LICENSE en la raíz), así que este campo no debería variar de una regla a otra."
+    },
+    "os": {
+      "type": "string",
+      "enum": ["windows", "linux", "macos"],
+      "description": "Sistema operativo al que aplica la regla (debe coincidir con endpoint.os en la query)"
+    },
+    "mitre": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tactic", "techniques"],
+      "properties": {
+        "tactic": {
+          "type": "string",
+          "description": "Debe coincidir con la carpeta rules/<tactica>/ en la que vive el archivo",
+          "enum": [
+            "Reconnaissance", "Resource Development", "Initial Access", "Execution",
+            "Persistence", "Privilege Escalation", "Stealth", "Defense Impairment",
+            "Credential Access", "Discovery", "Lateral Movement", "Collection",
+            "Command and Control", "Exfiltration", "Impact"
+          ]
+        },
+        "techniques": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "name"],
+            "properties": {
+              "id": { "type": "string", "pattern": "^T[0-9]{4}(\\.[0-9]{3})?$" },
+              "name": { "type": "string", "minLength": 1 }
+            }
+          }
+        },
+        "secondary": {
+          "type": "array",
+          "description": "Técnicas relevantes de OTRA táctica (p. ej. el vector de entrega de una regla de ejecución)",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "name", "tactic"],
+            "properties": {
+              "id": { "type": "string", "pattern": "^T[0-9]{4}(\\.[0-9]{3})?$" },
+              "name": { "type": "string", "minLength": 1 },
+              "tactic": { "type": "string" }
+            }
+          }
+        },
+        "tactics": {
+          "type": "array",
+          "description": "Lista plana de TODAS las tácticas a las que aplica el comportamiento detectado, cuando cruza más de una (p. ej. una técnica de Defense Evasion cuyo efecto real también es Privilege Escalation). Complementa a 'tactic' (la primaria/carpeta) y a 'secondary' (técnicas concretas de otra táctica); no las sustituye.",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "enum": [
+              "Reconnaissance", "Resource Development", "Initial Access", "Execution",
+              "Persistence", "Privilege Escalation", "Stealth", "Defense Impairment",
+              "Credential Access", "Discovery", "Lateral Movement", "Collection",
+              "Command and Control", "Exfiltration", "Impact"
+            ]
+          }
+        }
+      }
+    },
+    "severity": { "type": "string", "enum": ["Low", "Medium", "High", "Critical"] },
+    "category": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Categoría de la consola, p. ej. Ransomware, Phishing, Credential Access"
+    },
+    "action": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Acción de respuesta real de la consola, p. ej. Detect, Kill, KillAndQuarantine, DisconnectNetwork"
+    },
+    "action_description": {
+      "type": "string",
+      "description": "Explicación en humano de qué hace la acción"
+    },
+    "scope": { "type": "string", "enum": ["global", "account", "site", "group"] },
+    "status": { "type": "string", "enum": ["Draft", "Active", "Disabled"] },
+    "expiration": {
+      "type": "string",
+      "pattern": "^(Permanent|[0-9]{4}-[0-9]{2}-[0-9]{2})$"
+    },
+    "tags": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "notes": {
+      "type": "array",
+      "description": "Supuestos, limitaciones conocidas, cosas pendientes de verificar",
+      "items": { "type": "string" }
+    },
+    "query": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Query S1QL 2.0 completa, tal cual se pega en el editor de condición de la consola"
+    },
+    "trigger": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Umbral/frecuencia opcional (p. ej. 'count > 5 within 300'), SOLO si el editor de la consola realmente soporta un campo de este tipo para la regla. No confirmado como sintaxis universal: documentar en notes si se ha verificado en consola."
+    },
+    "syntax_checked": {
+      "type": "boolean",
+      "description": "true si la query se ha pegado en la consola real de SentinelOne y se ha comprobado que la sintaxis es válida. NO significa que la regla esté validada (eso es validation_status), ni que esté en Active, ni que se hayan corrido las fases de tests/README.md"
+    },
+    "power_query_hunting": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Query PowerQuery complementaria (con pipes: | group, | filter, | sort...) para threat hunting manual en Event Search. NO es una query STAR válida — S1QL de una regla STAR no admite pipes/agregación. Se usa para análisis que la regla por sí sola no puede hacer (p. ej. detectar periodicidad de beaconing)."
+    },
+    "art_test": {
+      "type": "boolean",
+      "description": "true si esta regla está diseñada para detectar uno o más tests de Atomic Red Team (https://github.com/redcanaryco/atomic-red-team)"
+    },
+    "art_technique": {
+      "type": "string",
+      "pattern": "^T[0-9]{4}(\\.[0-9]{3})?$",
+      "description": "Carpeta de Atomic Red Team correspondiente (atomics/<art_technique>/), normalmente igual a mitre.techniques[0].id"
+    },
+    "tests_included": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "integer", "minimum": 1 },
+      "description": "Números de los atomic tests de art_technique que cubre esta regla (p. ej. [1, 2, 4] para los tests #1, #2 y #4)"
+    },
+    "test_guids": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+      },
+      "description": "GUIDs de los atomic tests concretos (auto_generated_guid de cada test en el YAML de Atomic Red Team). Añade un comentario inline con el número/nombre del test para que sea legible."
+    },
+    "coverage": {
+      "type": "string",
+      "enum": ["full", "partial"],
+      "description": "Si la regla cubre el comportamiento completo del/los atomic test(s) referenciados en tests_included, o solo una parte (p. ej. la fase de control de un rootkit, no la carga del módulo)"
+    },
+    "validation_status": {
+      "type": "string",
+      "enum": ["not_tested", "validated", "failed"],
+      "description": "Obligatorio en toda regla, tenga o no un atomic test de Atomic Red Team ya identificado (art_test). Indica si se ha ejecutado un test real (normalmente en VM aislada, fase 5 de tests/README.md) contra esta regla y ha disparado como se espera. 'not_tested' es el valor por defecto para toda regla nueva: tanto si aún no se ha identificado/mapeado un atomic test concreto (art_test ausente o false) como si ya hay uno mapeado pero todavía no se ha ejecutado."
+    },
+    "last_validated": {
+      "type": ["string", "null"],
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+      "description": "Fecha (YYYY-MM-DD) de la última validación contra el atomic test real, o null si nunca se ha validado. Obligatoria (no null) cuando validation_status es 'validated'."
+    }
+  },
+  "if": {
+    "properties": { "validation_status": { "const": "validated" } },
+    "required": ["validation_status"]
+  },
+  "then": {
+    "required": ["last_validated"],
+    "properties": { "last_validated": { "type": "string" } }
+  }
+}

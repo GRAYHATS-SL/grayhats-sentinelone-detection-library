@@ -1,0 +1,40 @@
+name: "Impact - Stopping Critical Services (Database, Backup)"
+author: "GrayHats Detection Team"
+license: "AGPL-3.0-or-later"
+os: windows
+mitre:
+  tactic: Impact
+  techniques:
+    - id: T1489
+      name: "Service Stop"
+severity: High
+category: Ransomware
+action: KillAndQuarantine
+action_description: >
+  Mata el proceso que intenta detener servicios críticos de bases
+  de datos o backups y pone en cuarentena el binario responsable.
+scope: site
+status: Draft
+expiration: Permanent
+tags:
+  - ransomware
+  - impact
+  - service-stop
+  - backup
+notes:
+  - >
+    Detener servicios de SQL, Veeam, Acronis, Commvault u otros
+    sistemas de backup es un preludio común del ransomware antes
+    de iniciar el cifrado.
+  - >
+    Se excluyen cuentas de sistema (SYSTEM, NETWORK SERVICE) porque
+    pueden detener servicios por mantenimiento legítimo. Personalizar
+    la lista de nombres de servicios según tu infraestructura.
+
+syntax_checked: yes
+validation_status: not_tested
+query: |
+  event.type = 'Process Creation'
+    and (tgt.process.cmdline contains:anycase 'net stop' or tgt.process.cmdline contains:anycase 'sc.exe stop')
+    and tgt.process.cmdline contains:anycase ('SQL', 'Veeam', 'Backup', 'Acronis', 'Commvault', 'ShadowProtect')
+    and !(src.process.user contains:anycase ('SYSTEM', 'NETWORK SERVICE'))

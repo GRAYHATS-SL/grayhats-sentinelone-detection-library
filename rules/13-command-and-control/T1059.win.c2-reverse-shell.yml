@@ -1,0 +1,72 @@
+name: "Command and Control - Reverse Shell via Network Utility or Interpreter Redirect"
+author: "GrayHats Detection Team"
+license: "AGPL-3.0-or-later"
+os: windows
+mitre:
+  tactic: "Command and Control"
+  techniques:
+    - id: T1059
+      name: "Command and Scripting Interpreter"
+  secondary:
+    - id: T1071.001
+      name: "Application Layer Protocol: Web Protocols"
+      tactic: "Command and Control"
+severity: Critical
+category: "Command and Control"
+action: KillAndQuarantine
+action_description: >
+  Detecta reverse shells: herramientas de red (netcat, ncat, socat) con
+  argumentos de ejecución/conexión saliente, y el patrón de redirección de un
+  intérprete hacia una conexión (-e cmd/powershell/bash, socat EXEC:),
+  independientemente del nombre del binario. Cubre variantes renombradas.
+  KillAndQuarantine defendible para el patrón "-e <intérprete>" (casi nunca
+  benigno); validar en Detect si hay red team autorizado.
+scope: site
+status: Draft
+expiration: Permanent
+tags:
+  - command-and-control
+  - c2
+  - reverse-shell
+  - netcat
+  - socat
+notes:
+  - >
+    ALCANCE respecto a la regla hermana de listener: esta regla cubre la
+    dirección SALIENTE (reverse shell: el binario sale hacia el atacante con
+    -e/-c/connect/EXEC:). La apertura de puerto (bind shell / listener: -l,
+    -lvp, "listen") la cubre "Netcat Listener Mode Detected". Separadas por
+    dirección para que cada una tenga un propósito limpio y no se dupliquen.
+  - >
+    Detección REAL de renombrados (rama 2): el patrón ' -e (cmd|powershell|pwsh|
+    /bin/sh|bash)' caza la firma de reverse shell (ejecutar un intérprete y
+    redirigirlo a la conexión) en CUALQUIER binario, aunque se haya renombrado
+    nc.exe a svchost.exe. Esto es lo que hace robusta la regla: no depende del
+    nombre del ejecutable. La rama 3 hace lo mismo para socat (sintaxis EXEC:).
+  - >
+    Cuidado con -e y -c sueltos: son flags comunísimos en binarios legítimos
+    (bash -c, sh -c, python -c). Por eso NO se buscan aislados: en la rama 1 van
+    anclados a que el binario sea netcat/socat; en la rama 2 van anclados a que
+    vayan seguidos de un intérprete de shell. Buscar "-c " a secas generaría
+    falsos positivos masivos.
+  - >
+    Se retiró la exclusión "!(src.process.user contains 'SYSTEM')": una reverse
+    shell lanzada como SYSTEM tras escalada de privilegios es un escenario
+    post-explotación clásico; esa exclusión lo cegaría. Un reverse shell es
+    sospechoso lo lance quien lo lance.
+  - >
+    Se retiraron las flags de listener (-lvp, -l -p, -lp) que la versión original
+    mezclaba: pertenecen a la regla de bind shell/listener, no a esta de salida.
+  - >
+    Complemento de comportamiento: la señal que no depende de nombre ni
+    argumentos es la correlación proceso-conexión (un intérprete recién lanzado
+    generando un IP Connect saliente) y el análisis de beaconing. Esta regla es
+    la detección por firma de comando; combinar con las de comportamiento para
+    cubrir shells ofuscadas que no usen estos patrones textuales.
+validation_status: not_tested
+query: |
+  event.type = 'Process Creation' 
+    and ((tgt.process.name in ('nc.exe', 'nc64.exe', 'ncat.exe', 'netcat.exe', 'socat.exe') 
+    and tgt.process.cmdline contains:anycase ('-e ', '-c ', 'exec', 'connect')) 
+      or tgt.process.cmdline matches '(?i).* -e (cmd|powershell|pwsh|/bin/sh|bash).*' 
+      or tgt.process.cmdline matches '(?i)socat .*exec:')

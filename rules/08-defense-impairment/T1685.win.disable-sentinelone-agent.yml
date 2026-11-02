@@ -1,0 +1,86 @@
+name: "Defense Evasion - SentinelOne Agent Tampering or Disable Attempt"
+author: "GrayHats Detection Team"
+license: "AGPL-3.0-or-later"
+os: windows
+mitre:
+  tactic: "Defense Impairment"
+  techniques:
+    - id: T1685
+      name: "Disable or Modify Tools"
+severity: Critical
+category: "Defense Impairment"
+action: KillAndQuarantine
+action_description: >
+  Mata el proceso que intenta deshabilitar, detener o desinstalar
+  el agente de SentinelOne y pone en cuarentena el binario
+  responsable. También genera una alerta crítica inmediata.
+scope: site
+status: Draft
+expiration: Permanent
+tags:
+  - defense-evasion
+  - sentinelone
+  - tampering
+  - agent-disable
+  - edr-bypass
+notes:
+  - >
+    Esta regla protege al propio EDR. Cualquier intento de detener,
+    deshabilitar o desinstalar el agente debe ser tratado como una
+    emergencia de seguridad.
+  - >
+    SentinelCTL.exe es la herramienta oficial de línea de comandos
+    de SentinelOne. Su uso con los argumentos "disable" o "unload"
+    desde un proceso no autorizado es un fuerte indicador de
+    compromiso.
+  - >
+    El GUID de desinstalación de SentinelOne varía según la versión
+    y el instalador. Ajustar el patrón del GUID si es necesario. La
+    condición de msiexec.exe solo matchea si el comando incluye el
+    texto "Sentinel" — un desinstalado silencioso/scripteado vía
+    "msiexec /x {GUID}" (sin el nombre del producto en texto) no lo
+    detectaría. Añade el GUID real del instalador de tu versión en
+    una condición adicional si haces desinstalaciones silenciosas
+    controladas y quieres poder distinguirlas.
+  - >
+    Algunas tareas legítimas de mantenimiento de IT pueden requerir
+    la desinstalación o reinicio del agente. Coordinar con el equipo
+    de infraestructura para establecer un procedimiento controlado
+    y excluir esas rutas o cuentas de servicio específicas.
+  - >
+    Los agentes en modo "auto-desinstalación" al final de su licencia
+    también pueden disparar esta regla. Verificar exclusiones para
+    endpoints que estén siendo retirados de forma planificada.
+  - >
+    Las STAR Rules se ejecutan en el agente. Si el atacante logra
+    detener el agente antes de que la regla se evalúe, esta nunca
+    se disparará. Por eso debe tener máxima prioridad y configurarse
+    con acción KillAndQuarantine directa una vez validada en pruebas.
+  - >
+    Se quitó "src.process.user contains (SYSTEM, NETWORK SERVICE)" de
+    la exclusión: deshabilitar un EDR bien protegido normalmente
+    requiere privilegios SYSTEM, así que excluir ese contexto es
+    precisamente excluir el escenario de ataque más realista y
+    peligroso que esta regla debería cubrir. Se mantiene solo la
+    exclusión por nombre de proceso (sccm, setup, msiexec) para
+    mantenimiento legítimo conocido.
+  - >
+    El branch de reg.exe comprobaba "tgt.process.cmdline contains
+    reg.exe" en vez de "tgt.process.name = reg.exe" — inconsistente
+    con el resto de branches (que identifican el proceso por nombre,
+    no buscando su nombre como substring en su propia cmdline) y en
+    teoría matcheable por cualquier otro proceso cuya línea de
+    comandos mencione "reg.exe" como texto. Corregido.
+syntax_checked: yes
+validation_status: not_tested
+query: |
+  event.type = 'Process Creation'
+    and (
+    (tgt.process.name contains:anycase 'SentinelCTL.exe' and tgt.process.cmdline contains:anycase ('disable', 'unload', 'stop', 'shutdown'))
+    or (tgt.process.name = 'sc.exe' and tgt.process.cmdline contains:anycase ('stop', 'delete', 'config') and tgt.process.cmdline contains:anycase ('SentinelAgent', 'SentinelHelperService', 'SentinelStaticEngine'))
+    or (tgt.process.name = 'net.exe' and tgt.process.cmdline contains:anycase 'stop' and tgt.process.cmdline contains:anycase ('SentinelAgent', 'SentinelHelperService'))
+    or (tgt.process.name = 'taskkill.exe' and tgt.process.cmdline contains:anycase '/f' and tgt.process.cmdline contains:anycase 'Sentinel')
+    or (tgt.process.name = 'msiexec.exe' and tgt.process.cmdline contains:anycase '/x' and tgt.process.cmdline contains:anycase 'Sentinel')
+    or (tgt.process.name = 'reg.exe' and tgt.process.cmdline contains:anycase ('delete', 'add') and tgt.process.cmdline contains:anycase ('SentinelOne', 'SentinelAgent'))
+    )
+    and !(src.process.name contains:anycase ('sccm', 'setup'))

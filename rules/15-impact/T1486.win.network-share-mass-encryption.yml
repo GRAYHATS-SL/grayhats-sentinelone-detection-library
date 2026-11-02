@@ -1,0 +1,79 @@
+name: "Ransomware - Mass File Modification on Network Share"
+author: "GrayHats Detection Team"
+license: "AGPL-3.0-or-later"
+os: windows
+mitre:
+  tactic: Impact
+  techniques:
+    - id: T1486
+      name: Data Encrypted for Impact
+severity: Critical
+category: Ransomware
+action: DisconnectNetwork
+action_description: >
+  Desconecta al servidor de la red y alerta.
+scope: group
+status: Draft
+expiration: Permanent
+tags:
+  - ransomware
+  - network-share
+  - file-server
+  - mass-encryption
+notes:
+  - >
+    event.type incluye "File Rename" además de "File Modification": el
+    cambio de extensión de ransomware casi siempre es un renombrado, no
+    una modificación in-place (confirmado indirectamente por el propio
+    simulador de pruebas de este repo, que usa Rename-Item). Si en
+    producción se observa que algún ransomware llega vía "File Creation"
+    (escribe directamente el archivo cifrado con extensión final, sin
+    renombrar), añadir ese event.type también.
+  - >
+    Las rutas usan "contains:anycase" en vez de un "empieza por" anclado
+    con regex ("matches"): en una ruta absoluta de Windows, que el
+    substring aparezca es prácticamente equivalente a que sea un prefijo
+    (":" solo es válido justo tras la letra de unidad), y evita la
+    ambigüedad de doble escapado de backslashes dentro de una regex.
+  - >
+    ESTA REGLA DEBE APLICARSE SOLO AL GRUPO DE SERVIDORES DE ARCHIVOS,
+    nunca a nivel de site/global: DisconnectNetwork aísla el ENDPOINT
+    COMPLETO de la red, es decir, todo el servidor (y por tanto el
+    recurso compartido para TODOS los usuarios), no solo la sesión del
+    equipo cliente infectado. Confirmar que esto es el trade-off deseado
+    antes de activar: un falso positivo tira el share para toda la
+    organización, no solo aísla al atacante.
+  - >
+    BLOQUEANTE A VALIDAR: la condición de src.process.user asume que este
+    campo, en un evento de File Modification/File Rename generado por una
+    escritura SMB remota, refleja el usuario de dominio impersonado y no
+    la cuenta SYSTEM del propio servidor. Si el agente no expone esa
+    identidad impersonada para escrituras SMB, la condición excluiría el
+    100% de la actividad real de ransomware. Verificar con una prueba
+    real (usuario de dominio renombrando un archivo por SMB) antes de
+    pasar a Active.
+  - >
+    ".xxx" y ".zzz" son extensiones históricas de ransomware (familia
+    Locky, ~2016) pero mucho más genéricas que "lockbit"/"crab": mayor
+    riesgo de falso positivo. Vigilar en el periodo de prueba.
+  - >
+    Añadir a la exclusión las cuentas de servicio reales de
+    backup/antivirus del entorno, no solo SYSTEM/NETWORK SERVICE.
+  - >
+    Modificar tgt.file.path según la ruta real de los shares a
+    proteger de la organización.
+  - >
+    PENDIENTE DE VERIFICAR: no confirmado si la consola de STAR admite
+    comentarios "//" ni queries multilínea dentro del editor de
+    condición (hay indicios públicos de que podría no soportarlos
+    bien en la plataforma v2). Por eso este comentario se movió aquí
+    en vez de dejarlo dentro de `query` — antes de pegar cualquier
+    query de este repo en consola, prueba primero con una sencilla
+    para confirmar que el multilínea se admite tal cual.
+syntax_checked: yes
+validation_status: not_tested
+query: |
+  event.type in ("File Modification", "File Rename")
+  and tgt.file.path contains:anycase ("C:\\Shares\\Departamentos\\", "D:\\Documentos\\")
+  and tgt.file.extension in ("encrypted", "lockbit", "crypt", "locked", "crab", "xxx", "zzz")
+  and !(src.process.user contains:anycase ("NT AUTHORITY\\SYSTEM", "NT AUTHORITY\\NETWORK SERVICE"))

@@ -1,0 +1,75 @@
+name: "Exfiltration - Command Line Email Sending with Attachments"
+author: "GrayHats Detection Team"
+license: "AGPL-3.0-or-later"
+os: windows
+mitre:
+  tactic: Exfiltration
+  techniques:
+    - id: T1048.002
+      name: "Exfiltration Over Alternative Protocol: Asymmetric Encrypted Non-C2 Protocol"
+  secondary:
+    - id: T1059.001
+      name: "Command and Scripting Interpreter: PowerShell"
+      tactic: Execution
+severity: High
+category: Exfiltration
+action: Detect
+action_description: >
+  Detecta el uso de PowerShell o herramientas de terceros para enviar
+  correos electrónicos con archivos adjuntos desde la línea de comandos,
+  lo que puede indicar exfiltración vía email.
+scope: site
+status: Draft
+expiration: Permanent
+tags:
+  - exfiltration
+  - email
+  - send-mailmessage
+  - attachment
+notes:
+  - >
+    Send-MailMessage de PowerShell con -Attachments es un método común
+    de exfiltración. El cmdlet está deprecado por Microsoft pero sigue
+    plenamente funcional, por lo que continúa siendo usado por atacantes.
+    Además se monitorizan utilidades SMTP por línea de comandos (blat.exe,
+    sendemail.exe, mailsend.exe y swaks) y el uso de curl con esquema
+    smtp:// junto a flags de subida (--upload-file, --mail-from, -T).
+  - >
+    swaks se detecta por cmdline y no por process.name: al ser un script
+    Perl puede ejecutarse como "perl swaks", en cuyo caso el proceso sería
+    perl.exe. Buscar la cadena en la línea de comandos cubre ambos casos.
+  - >
+    Esta regla es más efectiva combinada con monitorización de volumen:
+    un solo envío puede ser legítimo, pero múltiples envíos en poco tiempo
+    son sospechosos. El conteo/agrupación se hace en Event Search
+    (PowerQuery con | group), no en la regla STAR, que no admite pipes.
+  - >
+    Validar en Detect antes de endurecer: Send-MailMessage y curl son
+    herramientas de administración habituales (jobs de reporting, alertas
+    de monitorización, scripts de backup que notifican por correo). No
+    aplicar exclusiones a ciegas; establecer primero un baseline y excluir
+    por proceso padre de scripts conocidos o por el servidor SMTP
+    corporativo de destino.
+  - >
+    Confirmación y contexto: cruzar el servidor SMTP de destino con la
+    telemetría de correo (Proofpoint) para verificar dominio destinatario
+    y presencia de adjuntos. Esto valida la exfiltración y aporta el dato
+    para el informe.
+  - >
+    Se quitó la exclusión "NOT src.process.publisher = Microsoft
+    Corporation": si un atacante opera manualmente en una sesión
+    interactiva (post-explotación con teclado en mano), el padre de
+    powershell.exe suele ser explorer.exe o cmd.exe, ambos firmados por
+    Microsoft — esa exclusión habría anulado ese escenario realista, que
+    además es como se plantea la propia regla (envío manual desde consola).
+syntax_checked: yes
+validation_status: not_tested
+query: |
+  event.type = 'Process Creation' 
+    and ((tgt.process.name = 'powershell.exe' 
+    and tgt.process.cmdline contains:anycase 'Send-MailMessage' 
+    and tgt.process.cmdline contains:anycase ('-Attachments', '-Attachment')) 
+      or tgt.process.name contains:anycase ('blat.exe', 'sendemail.exe', 'mailsend.exe') 
+      or tgt.process.cmdline contains:anycase 'swaks' or (tgt.process.name contains:anycase ('curl.exe', 'curl') 
+        and tgt.process.cmdline contains:anycase 'smtp://') or (tgt.process.cmdline contains:anycase 'smtp://' 
+        and tgt.process.cmdline contains:anycase ('--upload-file', '--mail-from', '-T ')))

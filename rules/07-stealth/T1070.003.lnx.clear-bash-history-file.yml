@@ -1,0 +1,72 @@
+# T1070.003.lnx.clear-bash-history-file.yml
+name: "Defense Evasion - Clear Linux Shell History File"
+author: "GrayHats Detection Team"
+license: "AGPL-3.0-or-later"
+os: linux
+art_test: yes
+art_technique: T1070.003
+tests_included: [1, 2, 3, 4, 5]
+test_guids:
+  - "a934276e-2be5-4a36-93fd-98adbb5bd4fc"   # Test #1: rm
+  - "cbf506a5-dd78-43e5-be7e-a46b7c7a0a11"   # Test #2: echo "" >
+  - "b1251c35-dcd3-4ea1-86da-36d27b54f31f"   # Test #3: cat /dev/null >
+  - "23d348f3-cc5c-4ba9-bd0a-ae09069f0914"   # Test #4: ln -sf /dev/null
+  - "47966a1d-df4f-4078-af65-db6d9aa20739"   # Test #5: truncate -s0
+coverage: full
+validation_status: not_tested
+last_validated: null
+mitre:
+  tactic: "Stealth"
+  tactics:
+    - "Stealth"
+  techniques:
+    - id: T1070.003
+      name: "Indicator Removal on Host: Clear Command History"
+severity: High
+category: "Stealth"
+action: Detect
+action_description: >
+  Detecta la manipulación del fichero de historial de shell (~/.bash_history y
+  equivalentes) para borrar rastro de comandos: borrado (rm), vaciado (echo/cat
+  /dev/null), truncado (truncate) o redirección a /dev/null (symlink). Basada en
+  los tests Atomic Red Team T1070.003 #1-#5.
+scope: site
+status: Draft
+expiration: Permanent
+tags:
+  - defense-evasion
+  - linux
+  - clear-history
+  - bash-history
+  - anti-forensics
+notes:
+  - >
+    Cubre las cinco variantes de manipulación del fichero (#1-#5): rm, "echo '' >",
+    "cat /dev/null >", "ln -sf /dev/null" y "truncate -s0", todas apuntando a un
+    fichero de historial (.bash_history, .zsh_history, .sh_history, etc.). La firma
+    común es el nombre del fichero de historial en la cmdline junto a un binario de
+    borrado/vaciado/truncado.
+  - >
+    Doble ángulo: (1) por comando (esta regla) — binario de manipulación +
+    "history" en la ruta; (2) por evento de fichero (regla hermana, más robusta) —
+    File Deletion/Modification sobre *.bash_history, que caza también el vaciado
+    por redirección del shell (echo "" > file) que no crea un proceso propio.
+  - >
+    IMPORTANTE sobre redirecciones (#2, #3): "echo '' > ~/.bash_history" y "cat
+    /dev/null > ~/.bash_history" — la redirección ">" la ejecuta el SHELL, no echo/
+    cat. Según cómo capture el tenant la cmdline, el ">" y la ruta destino pueden
+    aparecer en la cmdline del proceso echo/cat o en la del shell padre. La regla
+    busca la ruta de historial en la cmdline en general; verificar que se captura.
+    El ángulo de fichero (regla hermana) es más fiable para estos dos.
+  - >
+    Falsos positivos: bajos pero existen (un usuario que limpia su propio historial,
+    scripts de limpieza). Un borrado/truncado de .bash_history de OTRO usuario, o
+    desde una sesión sospechosa, es la señal fuerte. Validar en Detect.
+  - >
+    Verificar campos Linux: tgt.process.name, tgt.process.cmdline, endpoint.os
+    ('linux' vs 'Linux'). Confirmar con un columns en Event Search.
+query: |
+  event.type = 'Process Creation' 
+  and endpoint.os = 'linux' 
+  and tgt.process.name in ('rm', 'truncate', 'ln', 'shred', 'unlink') 
+  and tgt.process.cmdline matches '(?i).*(bash_history|zsh_history|sh_history|\.history|HISTFILE).*'

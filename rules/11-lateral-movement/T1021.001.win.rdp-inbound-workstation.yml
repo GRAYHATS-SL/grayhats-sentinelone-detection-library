@@ -1,0 +1,61 @@
+name: "Lateral Movement - Inbound RDP to Workstation"
+author: "GrayHats Detection Team"
+license: "AGPL-3.0-or-later"
+os: windows
+mitre:
+  tactic: "Lateral Movement"
+  techniques:
+    - id: T1021.001
+      name: "Remote Services: Remote Desktop Protocol"
+severity: High
+category: "Lateral Movement"
+action: Detect
+action_description: >
+  Detecta sesiones RDP entrantes (puerto 3389) establecidas hacia
+  workstations de usuario desde orígenes que NO son administradores. Un
+  equipo de usuario recibiendo RDP entrante es anómalo por diseño y
+  constituye una señal fuerte de movimiento lateral. Alta fidelidad: bajo
+  volumen esperado una vez excluidos soporte/admin.
+scope: site
+status: Draft
+expiration: Permanent
+tags:
+  - lateral-movement
+  - rdp
+  - inbound
+  - workstation
+notes:
+  - >
+    Ángulo de detección: mira al equipo que RECIBE la conexión (el destino),
+    no al que la inicia. Ventaja clave frente a la regla outbound: caza saltos
+    cuyo ORIGEN no tiene agente SentinelOne (dispositivos no gestionados, IoT,
+    equipos comprometidos sin EDR), porque el destino sí lo tiene. Cubre ese
+    punto ciego de la regla outbound.
+  - >
+    Semántica src/dst en inbound (¡se invierte respecto a outbound!): con
+    direction = 'INCOMING', src.ip.address es el equipo REMOTO que se conecta
+    (potencial atacante) y endpoint.name/local es la VÍCTIMA que recibe la
+    sesión. La lista de exclusión filtra src.ip.address (orígenes admin/soporte
+    autorizados).
+  - >
+    Foco en workstations: la exclusión por nombre (srv, dc, sql...) restringe la
+    regla a equipos de USUARIO. Un servidor recibiendo RDP es rutina; una
+    workstation recibiéndolo casi nunca es legítimo salvo soporte, que se acota
+    por IP de origen. Ajustar la convención de nombres a la del cliente; si no
+    hay convención fiable, usar grupos de S1 o inventario para separar
+    workstations de servidores.
+  - >
+    connectionStatus = 'SUCCESS': solo sesiones establecidas, no intentos
+    fallidos ni escaneos. Para vigilar también intentos (p. ej. fuerza bruta
+    RDP), crear regla aparte sin esta condición y con conteo por origen.
+  - >
+    Personalizar antes de usar: rellenar src.ip.address con las IPs de
+    admin/soporte/jump hosts autorizados, y validar que la exclusión de nombres
+    de servidor cubre tu nomenclatura real.
+validation_status: not_tested
+query: |
+  event.type = 'IP Connect' 
+    and event.network.direction = 'INCOMING' 
+    and dst.port.number = 3389 and event.network.connectionStatus = 'SUCCESS' 
+    and !(endpoint.name contains:anycase ('srv', 'dc', 'sql', 'server')) 
+    and !(src.ip.address in ('192.168.30.10', '192.168.30.11', '192.168.30.12'))

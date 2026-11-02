@@ -1,0 +1,47 @@
+name: "Impact - Delete Backups via wbadmin"
+author: "GrayHats Detection Team"
+license: "AGPL-3.0-or-later"
+os: windows
+mitre:
+  tactic: Impact
+  techniques:
+    - id: T1490
+      name: "Inhibit System Recovery"
+severity: Critical
+category: Ransomware
+action: KillAndQuarantine
+action_description: >
+  Mata el proceso que intenta eliminar copias de seguridad del
+  sistema mediante wbadmin.exe y pone en cuarentena el binario
+  responsable.
+scope: site
+status: Draft
+expiration: Permanent
+tags:
+  - ransomware
+  - impact
+  - wbadmin
+  - backup-deletion
+notes:
+  - >
+    Complementa la regla de vssadmin. wbadmin.exe es la herramienta
+    de administración de Windows Server Backup y su uso con el
+    argumento "delete" sobre backups o catálogos es un fuerte
+    indicador de ransomware.
+  - >
+    La exclusión "NOT src.process.name = wbengine.exe" probablemente
+    no protege ningún uso legítimo real: wbengine.exe es el servicio
+    de backend con el que habla wbadmin.exe vía RPC, no el proceso que
+    normalmente lo LANZA (eso suele ser cmd.exe, PowerShell o el Programador
+    de tareas). Se deja de momento porque no hace daño, pero no asumas
+    que filtra el mantenimiento legítimo de backups — para eso, prueba
+    primero en Detect y añade exclusiones por el script/tarea real que
+    uses para limpieza de catálogos, si lo hay.
+syntax_checked: yes
+validation_status: not_tested
+query: |
+  event.type = "Process Creation"
+  AND tgt.process.name = "wbadmin.exe"
+  AND tgt.process.cmdline contains:anycase "delete"
+  AND tgt.process.cmdline contains:anycase ("backup", "catalog", "systemstatebackup")
+  AND !(src.process.name = "wbengine.exe")

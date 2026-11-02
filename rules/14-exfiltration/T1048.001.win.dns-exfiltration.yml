@@ -1,0 +1,56 @@
+name: "Exfiltration - Suspicious DNS Queries Indicative of Tunneling"
+author: "GrayHats Detection Team"
+license: "AGPL-3.0-or-later"
+os: windows
+mitre:
+  tactic: Exfiltration
+  techniques:
+    - id: T1048.001
+      name: "Exfiltration Over Alternative Protocol: Exfiltration Over Symmetric Encrypted Non-C2 Protocol"
+  secondary:
+    - id: T1071.004
+      name: "Application Layer Protocol: DNS"
+      tactic: "Command and Control"
+severity: High
+category: Exfiltration
+action: Detect
+action_description: >
+  Detecta consultas DNS con longitud o patrones anómalos que pueden
+  indicar tunelización DNS para exfiltración de datos.
+scope: site
+status: Draft
+expiration: Permanent
+tags:
+  - exfiltration
+  - dns
+  - tunneling
+  - data-exfil
+notes:
+  - >
+    Los túneles DNS suelen usar subdominios largos (más de 40
+    caracteres) o un alto volumen de consultas a dominios poco
+    comunes. Esta regla se enfoca en consultas DNS con patrones
+    de base64 (alfanuméricos largos en el subdominio).
+  - >
+    Falsos positivos esperables en entornos que usan servicios de
+    DNS dinámico o CDNs con subdominios largos legítimos. Validar
+    y ajustar exclusiones de dominios conocidos.
+  - >
+    PENDIENTE: La versión actual solo detecta longitud de subdominio.
+    No tengo confirmado el operador de longitud exacta en S1QL 2.0.
+    Se usa un patrón con contains:anycase para múltiples puntos.
+  - >
+    Se cambió "matches:anycase" (no confirmado como operador real) por
+    "matches" con el flag inline "(?i)" — ese sí está confirmado en
+    ejemplos reales de S1QL 2.0. También queda pendiente de verificar
+    el doble escapado de backslashes dentro de una regex: ya vimos con
+    vssadmin que no está confirmado cómo interactúan el escapado de
+    string de S1QL y el de la propia regex. Antes de activar, prueba
+    esta query literal en la consola para confirmar que el patrón
+    matchea lo esperado.
+syntax_checked: yes
+validation_status: not_tested
+query: |
+  event.type = 'DNS Resolved'
+    and tgt.network.dns.request matches '(?i).*\.[a-f0-9]{32,}\..*'
+    and !(tgt.network.dns.request contains:anycase ('azure.com', 'amazonaws.com', 'cloudfront.net', 'akamai.net'))

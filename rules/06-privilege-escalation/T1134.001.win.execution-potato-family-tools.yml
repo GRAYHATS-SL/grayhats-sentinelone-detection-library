@@ -1,0 +1,58 @@
+name: "Privilege Escalation - Potato Family and SeImpersonate Abuse (Tool Signatures)"
+author: "GrayHats Detection Team"
+license: "AGPL-3.0-or-later"
+os: windows
+mitre:
+  tactic: "Privilege Escalation"
+  techniques:
+    - id: T1134.001
+      name: "Access Token Manipulation: Token Impersonation/Theft"
+  secondary:
+    - id: T1068
+      name: "Exploitation for Privilege Escalation"
+      tactic: "Privilege Escalation"
+severity: Critical
+category: "Privilege Escalation"
+action: Detect
+action_description: >
+  Detecta herramientas de la familia Potato (JuicyPotato, RoguePotato,
+  SweetPotato, GodPotato, PrintSpoofer, EfsPotato, etc.) por nombre de binario y
+  por firmas de línea de comandos, que abusan de SeImpersonatePrivilege para
+  escalar a SYSTEM desde una cuenta de servicio. Ángulo por firma: rápido pero
+  evadible con renombrado; complementar con la regla de comportamiento (Ángulo B).
+scope: site
+status: Draft
+expiration: Permanent
+tags:
+  - privilege-escalation
+  - potato
+  - printspoofer
+  - seimpersonate
+  - juicypotato
+notes:
+  - >
+    Familia cubierta por nombre: JuicyPotato, RottenPotato, RoguePotato,
+    SweetPotato, GodPotato, PrintSpoofer, EfsPotato, SharpEfsPotato, LocalPotato,
+    DcomPotato, RemotePotato. Comparten el abuso de SeImpersonatePrivilege /
+    SeAssignPrimaryToken vía coerción DCOM/RPC o el spooler de impresión.
+  - >
+    Firmas de cmdline: los CLSID de DCOM característicos de JuicyPotato
+    ({4991d34b-80a1-4291-83b6-3328366b9097} BITS y otros), el flag "-c" de
+    JuicyPotato con CLSID, "-i" interactive, y referencias a
+    SeImpersonatePrivilege/SeAssignPrimaryTokenPrivilege en la línea de comandos.
+    PrintSpoofer suele invocarse con "-i cmd" o "-c".
+  - >
+    Evasión: todos estos se renombran trivialmente. La detección robusta es el
+    comportamiento (Ángulo B): un proceso de servicio con SeImpersonate genera un
+    hijo SYSTEM. Esta regla es la red rápida para binarios sin ofuscar.
+  - >
+    action Detect: aunque los nombres son muy específicos y casi siempre
+    maliciosos, se valida primero por si hay pentest autorizado. Tras baseline,
+    candidata a Kill (estos nombres no tienen uso legítimo).
+syntax_checked: yes
+validation_status: not_tested
+query: |
+  event.type = 'Process Creation' 
+    and (tgt.process.name in ('juicypotato.exe', 'juicypotatong.exe', 'rottenpotato.exe', 'roguepotato.exe', 'sweetpotato.exe', 'godpotato.exe', 'printspoofer.exe', 'printspoofer64.exe', 'efspotato.exe', 'sharpefspotato.exe', 'localpotato.exe', 'dcompotato.exe', 'remotepotato.exe', 'potato.exe') 
+    or tgt.process.cmdline contains:anycase ('juicypotato', 'roguepotato', 'printspoofer', 'godpotato', 'sweetpotato', 'efspotato', '4991d34b-80a1-4291-83b6-3328366b9097') 
+    or (tgt.process.cmdline contains:anycase 'SeImpersonatePrivilege' and tgt.process.cmdline contains:anycase ('enable', 'impersonate')))

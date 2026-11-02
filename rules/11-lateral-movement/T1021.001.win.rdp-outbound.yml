@@ -1,0 +1,72 @@
+name: "Lateral Movement - Internal RDP Connection to Non-Admin Source"
+author: "GrayHats Detection Team"
+license: "AGPL-3.0-or-later"
+os: windows
+mitre:
+  tactic: "Lateral Movement"
+  techniques:
+    - id: T1021.001
+      name: "Remote Services: Remote Desktop Protocol"
+severity: Medium
+category: "Lateral Movement"
+action: Detect
+action_description: >
+  Detecta conexiones RDP salientes (puerto 3389) hacia hosts de la red
+  interna originadas por equipos que NO están en la lista de IPs de
+  administradores. Patrón de movimiento lateral vía escritorio remoto. En
+  modo Detect por el alto volumen de RDP interno legítimo; requiere
+  establecer un baseline y completar exclusiones antes de endurecer.
+scope: site
+status: Draft
+expiration: Permanent
+tags:
+  - lateral-movement
+  - rdp
+  - internal
+  - remote-desktop
+notes:
+  - >
+    Enfoque: alerta ante cualquier RDP interno saliente salvo el originado
+    por IPs de administradores conocidas. Es el diseño más simple y también
+    el más ruidoso: mesa de ayuda, monitorización, jump hosts o cualquier
+    admin no incluido en la lista dispararán la regla. Validar primero como
+    hunting en Event Search para construir el baseline de orígenes legítimos.
+  - >
+    IMPORTANTE - personalizar antes de usar: (1) Ajustar dst.ip.address a los
+    rangos internos reales (una condición "or dst.ip.address contains 'X.Y.Z.'"
+    por cada /24), o usar el regex RFC1918 anclado que cubre las tres clases
+    privadas. (2) Rellenar la lista src.ip.address con las IPs de los equipos
+    de administradores y de los jump hosts/bastiones que hacen RDP legítimo
+    (fuente nº1 de falsos positivos).
+  - >
+    Matching de subred: el punto final en "192.168.30." hace que contains
+    funcione como "empieza por" para ese /24 con precisión (una IPv4 válida no
+    puede contener esa cadena en medio). Solo es fiable a nivel /24; para
+    rangos más amplios (/16) usar el regex anclado con ^ para evitar falsos
+    positivos por substring (p. ej. 10.192.168.5 contendría "192.168.").
+    Recordatorio: en el operador matches el regex va con barra simple (\.),
+    no doble como en las rutas UNC.
+  - >
+    Reducción de ruido opcional: añadir "event.network.connectionStatus =
+    'SUCCESS'" para ignorar intentos fallidos/escaneos (quitarlo si se quiere
+    ver también los intentos). Excluir explícitamente los jump hosts como
+    origen además de las IPs de admin.
+  - >
+    Señal de mayor fidelidad (para regla hermana): el movimiento lateral real
+    se distingue por el patrón, no por la existencia de RDP — un mismo origen
+    conectando a MÚLTIPLES destinos internos en poco tiempo, un origen que
+    normalmente no inicia RDP (workstation de usuario), o RDP fuera de horario.
+    El conteo de destinos distintos por origen se hace en Event Search con
+    | group ... estimate_distinct(dst.ip.address), no en la STAR (sin pipes).
+  - >
+    Correlación de eventos: 'IP Connect' con direction OUTGOING identifica el
+    equipo que ORIGINA la conexión (src.process/src.ip), que es lo que interesa
+    para detectar quién se mueve. src.process.user aporta la cuenta usada.
+syntax_checked: yes
+validation_status: not_tested
+query: |
+  event.type = 'IP Connect' 
+    and event.network.direction = 'OUTGOING' 
+    and dst.port.number = 3389 
+    and dst.ip.address matches '^(10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[01])\.)' 
+    and !(src.ip.address in ('192.168.30.10', '192.168.30.11', '192.168.30.12'))

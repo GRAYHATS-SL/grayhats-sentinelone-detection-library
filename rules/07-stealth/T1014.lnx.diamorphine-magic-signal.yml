@@ -1,0 +1,79 @@
+# T1014.lnx.diamorphine-magic-signal.yml
+name: "Rootkit - Diamorphine Magic Signal Control"
+author: "GrayHats Detection Team"
+license: "AGPL-3.0-or-later"
+os: linux
+art_test: yes
+art_technique: T1014
+tests_included: [4]
+test_guids:
+  - "0b996469-48c6-46e2-8155-a17f8b6c2247"   # Test #4: Diamorphine (kill -31/-63 control)
+coverage: partial   # cubre la fase de control (señales), no la carga del módulo
+validation_status: not_tested
+last_validated: null
+mitre:
+  tactic: "Stealth"
+  tactics:
+    - "Stealth"
+    - "Privilege Escalation"
+  techniques:
+    - id: T1014
+      name: "Rootkit"
+  secondary:
+    - id: T1548
+      name: "Abuse Elevation Control Mechanism"
+      tactic: "Privilege Escalation"
+severity: Critical
+category: "Stealth"
+action: Detect
+action_description: >
+  Detecta el uso de las señales de control "mágicas" del rootkit Diamorphine:
+  kill -31 (ocultar/mostrar un PID), kill -63 (elevar privilegios), kill -64
+  (ocultar/mostrar el propio módulo). Estas señales no tienen uso legítimo y
+  constituyen la interfaz de control del rootkit. Basada en el test ART T1014 #4.
+scope: site
+status: Draft
+expiration: Permanent
+tags:
+  - rootkit
+  - linux
+  - diamorphine
+  - magic-signal
+  - high-fidelity
+notes:
+  - >
+    Diamorphine se controla enviando señales de tiempo real específicas (SIGRTMIN
+    +n) vía kill: -31 conmuta la visibilidad de un PID, -63 da root al proceso
+    que la envía, -64 conmuta la visibilidad del módulo. Ningún software legítimo
+    usa "kill -31"/"kill -63"/"kill -64": su aparición en una cmdline es
+    patognomónica de Diamorphine (o un rootkit derivado que reutilice el esquema).
+  - >
+    Cruce de tácticas: la señal -63 da root al proceso que la envía, lo que es
+    Privilege Escalation (T1548 - Abuse Elevation Control Mechanism), no solo
+    evasión. Aunque T1014 se cataloga oficialmente como Defense Evasion, esta
+    regla cruza a Privilege Escalation por la semántica de la señal -63; de ahí el
+    bloque tactics con ambas.
+  - >
+    Fidelidad máxima: a diferencia de insmod/modprobe (que tienen uso legítimo),
+    estas señales NO lo tienen. Candidata directa a Critical + contención. Es la
+    regla de T1014 con MENOR solape con el motor nativo: un IOC muy específico que
+    la detección genérica puede no cubrir. Marcar como "duplica motor: no" en el
+    índice.
+  - >
+    kill puede ser un builtin del shell (no un proceso propio), por lo que la
+    detección va sobre la cmdline del shell (bash/sh) que lo invoca, no sobre un
+    proceso "kill". Verificar cómo captura el tenant los builtins de shell: si no
+    los registra en cmdline, esta señal se escapa por esta vía y el ángulo bueno
+    para Diamorphine pasa a ser la carga del módulo (regla hermana).
+  - >
+    coverage=partial: el test #4 tiene dos fases (cargar el módulo Y controlarlo
+    con señales); esta regla cubre solo la segunda. La carga la cubre la regla
+    "Linux Kernel Module Load", por eso el test #4 aparece en ambas.
+  - >
+    El regex captura "kill -31/-63/-64" con espaciado variable. Recordatorio sobre
+    el colapso de backslashes en la consola: si "\s+" o "\b" dan problemas, usar la
+    versión sin ellos: matches '(?i).*kill -(31|63|64).*'.
+query: |
+  event.type = 'Process Creation' 
+  and endpoint.os = 'linux' 
+  and tgt.process.cmdline matches '(?i).*kill\s+-(31|63|64)\b.*'

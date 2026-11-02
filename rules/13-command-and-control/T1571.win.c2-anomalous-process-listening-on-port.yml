@@ -1,0 +1,59 @@
+name: "Command and Control - Anomalous Process Listening on Port"
+author: "GrayHats Detection Team"
+license: "AGPL-3.0-or-later"
+os: windows
+mitre:
+  tactic: "Command and Control"
+  techniques:
+    - id: T1571
+      name: "Non-Standard Port"
+  secondary:
+    - id: T1059
+      name: "Command and Scripting Interpreter"
+      tactic: "Execution"
+severity: High
+category: "Command and Control"
+action: Detect
+action_description: >
+  Detecta procesos NO habituales abriendo un listener (evento IP Listen) en
+  puertos altos. A diferencia de la detección por nombre de binario, caza el
+  netcat/listener renombrado, ya que se basa en el comportamiento de red
+  (escucha en puerto) y no en el nombre del ejecutable.
+scope: site
+status: Draft
+expiration: Permanent
+tags:
+  - command-and-control
+  - c2
+  - listener
+  - ip-listen
+  - high-fidelity
+notes:
+  - >
+    Robustez frente a evasión: la detección por tgt.process.name (nc.exe...) se
+    evade renombrando el binario (svc.exe -lvp 4444). El evento IP Listen
+    registra la apertura de un puerto de escucha independientemente del nombre
+    del proceso, por lo que esta regla es mucho más difícil de evadir.
+  - >
+    La allowlist de src.process.name excluye los servicios legítimos que
+    escuchan normalmente (svchost, services, lsass, System, wininit). Ampliarla
+    con las aplicaciones del entorno que legítimamente abren listeners en puertos
+    altos (servidores de aplicación, bases de datos, agentes) tras el baseline,
+    o restringir por rango de puerto conocido.
+  - >
+    Filtro src.port.number > 1024: se ignoran los puertos de sistema/servicio
+    bien conocidos (<1024). Ajustar si el entorno tiene servicios legítimos en
+    puertos altos concretos; en ese caso, excluir esos puertos específicos en
+    lugar de bajar el umbral.
+  - >
+    action en Detect: un listener en puerto alto puede ser legítimo (apps de
+    desarrollo, servidores locales). Validar el baseline de qué procesos abren
+    listeners en el entorno antes de considerar contención. Un proceso desde ruta
+    temporal, un intérprete (powershell) o un binario sin firma escuchando en un
+    puerto alto son los casos a priorizar para investigación.
+syntax_checked: yes
+validation_status: not_tested
+query: |
+  event.type = 'IP Listen' 
+    and src.port.number > 1024 
+    and !(src.process.name in ('svchost.exe', 'services.exe', 'lsass.exe', 'System', 'wininit.exe', 'spoolsv.exe'))

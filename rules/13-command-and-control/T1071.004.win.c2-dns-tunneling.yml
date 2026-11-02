@@ -1,0 +1,64 @@
+name: "Command and Control - DNS Tunneling via Long Subdomain Queries"
+author: "GrayHats Detection Team"
+license: "AGPL-3.0-or-later"
+os: windows
+mitre:
+  tactic: "Command and Control"
+  techniques:
+    - id: T1071.004
+      name: "Application Layer Protocol: DNS"
+  secondary:
+    - id: T1568.002
+      name: "Dynamic Resolution: Domain Generation Algorithms"
+      tactic: "Command and Control"
+severity: High
+category: "Command and Control"
+action: Detect
+action_description: >
+  Detecta consultas DNS con subdominios anormalmente largos (más de
+  40 caracteres) que contienen patrones alfanuméricos consistentes
+  con tunelización DNS o Domain Generation Algorithms (DGA).
+scope: site
+status: Draft
+expiration: Permanent
+tags:
+  - command-and-control
+  - c2
+  - dns
+  - tunneling
+  - dga
+notes:
+  - >
+    Los túneles DNS (como dnscat2, Iodine, o Cobalt Strike con
+    beacon DNS) codifican datos en subdominios largos. Las DGAs
+    generan dominios aleatorios con alta entropía.
+  - >
+    El patrón busca subdominios con 32 o más caracteres hexadecimales
+    consecutivos, típicos de datos codificados en base16 o hashes.
+  - >
+    Falsos positivos esperables: CDNs con subdominios largos
+    (CloudFront, Akamai), servicios de acortamiento de URLs,
+    o entornos que usan dominios largos para tracking.
+  - >
+    Se excluyen dominios conocidos de CDN y cloud. Ajustar según
+    los servicios que use tu organización.
+  - >
+    Se cambió "matches:anycase" (operador no confirmado) por
+    "matches" con el flag inline "(?i)" — mismo fix ya aplicado en
+    win-dns-exfiltration.yml. Sigue pendiente confirmar el
+    doble escapado de backslashes dentro de una regex real.
+  - >
+    SOLAPE CONOCIDO: esta regla es casi idéntica a
+    rules/exfiltration/win-dns-exfiltration.yml (mismo patrón de
+    detección de tunelización DNS), clasificada bajo Exfiltration en
+    vez de Command and Control porque MITRE separa la técnica según
+    el propósito (T1048.001 vs T1071.004/T1568.002). Si ambas quedan
+    activas, un mismo evento generará dos alertas. Decide si prefieres
+    mantener las dos (para verlo en ambas categorías) o consolidar en
+    una sola con ambas técnicas referenciadas.
+syntax_checked: yes
+validation_status: not_tested
+query: event.type = 'DNS Resolved' 
+  and tgt.network.dns.request matches '(?i).*\.[a-f0-9]{32,}\..*' 
+  and !(tgt.network.dns.request contains:anycase ('cloudfront.net', 'akamai.net', 'akamaiedge.net', 'azureedge.net', 'cdn')) 
+  and !(tgt.network.dns.request contains:anycase ('microsoft.com', 'amazonaws.com', 'googleapis.com'))

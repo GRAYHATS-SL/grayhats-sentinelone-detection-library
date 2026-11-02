@@ -1,0 +1,58 @@
+name: "Command and Control - Known C2 Framework Strings (High Confidence)"
+author: "GrayHats Detection Team"
+license: "AGPL-3.0-or-later"
+os: windows
+mitre:
+  tactic: "Command and Control"
+  techniques:
+    - id: T1071.001
+      name: "Application Layer Protocol: Web Protocols"
+  secondary:
+    - id: T1105
+      name: "Ingress Tool Transfer"
+      tactic: "Command and Control"
+severity: Critical
+category: "Command and Control"
+action: KillAndQuarantine
+action_description: >
+  Detecta y neutraliza procesos cuya línea de comandos contiene cadenas de
+  frameworks C2 de ALTA FIABILIDAD (meterpreter, msfvenom, cobaltstrike,
+  beacon.x64/x86, sliver-client/server, brute-ratel, etc.), cadenas que casi
+  nunca aparecen en software legítimo. KillAndQuarantine justificable por el
+  bajo índice de falsos positivos de estos indicadores concretos.
+scope: site
+status: Draft
+expiration: Permanent
+tags:
+  - command-and-control
+  - c2
+  - cobaltstrike
+  - metasploit
+  - sliver
+  - high-confidence
+notes:
+  - >
+    Solo cadenas de alta fiabilidad: términos que no son palabras comunes ni
+    nombres de producto legítimo. Separadas deliberadamente de las cadenas
+    ambiguas (empire, grunt, ninja, apollo...), que van en una regla distinta
+    en modo Detect porque generan falsos positivos con software legítimo.
+  - >
+    ALCANCE (importante, no sobreestimar): esta regla caza C2 por su NOMBRE en
+    la cmdline, lo que solo funciona contra operadores descuidados o muestras
+    sin ofuscar. Un Cobalt Strike/Sliver desplegado en serio corre inyectado en
+    memoria, con procesos de nombre legítimo y sin cadenas identificativas: NO
+    dispara aquí. Es una red para lo evidente, no la detección principal de C2 —
+    esa es el análisis de comportamiento (beaconing/jitter, inyección, named
+    pipes). Complementaria, no sustitutiva.
+  - >
+    Se retiró 'beacon.dll' de la lista: "beacon" es demasiado común (DLLs
+    legítimas, Bluetooth beacons) y beacon.dll a secas puede ser benigno.
+    beacon.x64/beacon.x86 sí son específicos de Cobalt Strike y se mantienen.
+  - >
+    Validar en Detect si el entorno tiene equipos de red team / formación en
+    seguridad autorizados antes de activar KillAndQuarantine, para no neutralizar
+    ejercicios legítimos.
+validation_status: not_tested
+query: |
+  event.type = 'Process Creation' 
+    and tgt.process.cmdline contains:anycase ('meterpreter', 'metsrv', 'msfvenom', 'msfconsole', 'cobaltstrike', 'cobalt_strike', 'beacon.x64', 'beacon.x86', 'powershell_empire', 'sliver-client', 'sliver-server', 'brute-ratel', 'bruteratel', 'starkiller', 'nighthawk')

@@ -1,0 +1,61 @@
+name: "Persistence - Suspicious Payload in Registry Run Key"
+author: "GrayHats Detection Team"
+license: "AGPL-3.0-or-later"
+os: windows
+mitre:
+  tactic: Persistence
+  techniques:
+    - id: T1547.001
+      name: "Boot or Logon Autostart Execution: Registry Run Keys / Startup Folder"
+severity: High
+category: Persistence
+action: Detect
+action_description: >
+  Se ha detectado la creación o modificación de un valor en una clave de
+  registro de inicio automático (Run/RunOnce) que establece persistencia de
+  manera anómala.
+scope: site
+status: Draft
+expiration: Permanent
+tags:
+  - persistence
+  - registry
+  - run-key
+  - startup
+notes:
+  - >
+    Alcance: esta regla solo cubre las claves Run/RunOnce
+    (registry.keyPath contains "\CurrentVersion\Run", que por substring capta
+    Run, RunOnce y variantes). NO cubre IFEO, Winlogon\Shell/Userinit,
+    BootExecute ni AppInit_DLLs, que sí estaban en la versión anterior: cada una
+    tiene telemetría y discriminador propios y son reglas aparte. Por eso se
+    retiró el secondary T1546.012 (IFEO): la query ya no lo toca.
+  - >
+    El discriminador es el VALOR escrito, no el hecho de tocar la clave. Dispara
+    solo si el dato del valor apunta a una ruta sospechosa (Temp, Public,
+    AppData, Downloads...), o es un intérprete con argumentos de
+    descarga/ofuscación (-enc, -w hidden, iex, downloadstring, http(s)...), o un
+    LOLBin (rundll32, regsvr32, certutil, bitsadmin). Escribir una ruta legítima
+    en Run no dispara. Esto sustituye a las exclusiones por proceso de la versión
+    anterior (sccm/setup), que ya no están.
+art_test: false
+syntax_checked: true
+validation_status: not_tested
+query: |
+  event.type in ('Registry Value Create', 'Registry Value Modified')
+  AND registry.keyPath contains:anycase "\\CurrentVersion\\Run"
+  AND (
+      registry.value contains:anycase ("C:\\Windows\\Temp\\", "C:\\Users\\Public\\", "C:\\PerfLogs\\", "C:\\Temp\\", "C:\\tmp\\")
+      OR
+      (
+       registry.value contains:anycase "C:\\Users\\"
+       AND registry.value contains:anycase ("\\AppData\\Local\\Temp\\", "\\AppData\\Roaming\\", "\\Downloads\\", "\\Desktop\\", "\\Documents\\")
+      )
+      OR
+      (
+       registry.value contains:anycase ("powershell", "pwsh", "cmd.exe", "wscript", "cscript", "mshta")
+       AND registry.value contains:anycase ("-enc", "-encodedcommand", "-w hidden", "-windowstyle hidden", "-nop", "-noprofile", "iex", "invoke-expression", "iwr", "invoke-webrequest", "downloadstring", "downloadfile", "start-bitstransfer", "frombase64string", "http://", "https://")
+      )
+      OR
+      registry.value contains:anycase ("rundll32", "regsvr32", "certutil", "bitsadmin")
+    )

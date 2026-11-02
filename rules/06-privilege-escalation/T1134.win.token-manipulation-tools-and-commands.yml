@@ -1,0 +1,61 @@
+name: "Privilege Escalation - Token Manipulation Tools and Commands"
+author: "GrayHats Detection Team"
+license: "AGPL-3.0-or-later"
+os: windows
+mitre:
+  tactic: "Privilege Escalation"
+  techniques:
+    - id: T1134
+      name: "Access Token Manipulation"
+  secondary:
+    - id: T1134.001
+      name: "Token Impersonation/Theft"
+      tactic: "Privilege Escalation"
+severity: High
+category: "Privilege Escalation"
+action: Detect
+action_description: >
+  Detecta herramientas y comandos de manipulación de tokens de acceso
+  (incognito, Tokenvator, Invoke-TokenManipulation, uso de APIs de
+  impersonación/privilegios en PowerShell) y la firma de línea de comandos del
+  "getsystem" por named pipe de Meterpreter/Cobalt Strike. Ángulo por firma:
+  rápido pero evadible con renombrado/ofuscación; complementar con la regla de
+  comportamiento (Ángulo B).
+scope: site
+status: Draft
+expiration: Permanent
+tags:
+  - privilege-escalation
+  - token-manipulation
+  - getsystem
+  - impersonation
+notes:
+  - >
+    Cubre tres tipos de firma: (1) herramientas dedicadas (incognito, tokenvator);
+    (2) cmdlets/APIs de PowerShell para manipular tokens y privilegios
+    (Invoke-TokenManipulation de PowerSploit, AdjustTokenPrivileges,
+    DuplicateToken, ImpersonateLoggedOnUser, SeDebugPrivilege/SeImpersonate
+    referenciados explícitamente); (3) la firma clásica del getsystem por named
+    pipe de Meterpreter: un servicio que ejecuta "cmd.exe /c echo <datos> >
+    \\.\pipe\<nombre>", detectable por la combinación echo + \\.\pipe\.
+  - >
+    whoami /priv y whoami /groups se incluyen como señal DÉBIL de reconocimiento
+    de privilegios (previo a elegir vector de escalada). Alto ruido potencial
+    (admins legítimos lo usan); mantener solo si el volumen es asumible, o mover a
+    hunting.
+  - >
+    Evasión: los nombres de herramienta se evaden renombrando y los cmdlets se
+    ofuscan. Esta regla NO es la detección principal de T1134 — lo es la regla de
+    comportamiento (proceso SYSTEM con padre no-SYSTEM), que no depende de texto.
+  - >
+    action Detect: SeDebugPrivilege y las APIs de token tienen usos legítimos
+    (depuradores, algunas herramientas de gestión). Validar baseline antes de
+    endurecer.
+syntax_checked: yes
+validation_status: not_tested
+query: |
+  event.type = 'Process Creation' 
+    and (tgt.process.name in ('incognito.exe', 'tokenvator.exe') 
+      or tgt.process.cmdline contains:anycase ('Invoke-TokenManipulation', 'AdjustTokenPrivileges', 'ImpersonateLoggedOnUser', 'DuplicateTokenEx', 'SeDebugPrivilege', 'SeImpersonatePrivilege', 'steal_token', 'make_token') 
+      or (tgt.process.cmdline contains:anycase 'echo' and tgt.process.cmdline contains:anycase '\\\\.\\pipe\\') 
+      or tgt.process.cmdline matches '(?i)whoami\s+/priv')

@@ -1,0 +1,54 @@
+name: "Command and Control - Netcat Listener Mode Detected"
+author: "GrayHats Detection Team"
+license: "AGPL-3.0-or-later"
+os: windows
+mitre:
+  tactic: "Command and Control"
+  techniques:
+    - id: T1059
+      name: "Command and Scripting Interpreter"
+  secondary:
+    - id: T1571
+      name: "Non-Standard Port"
+      tactic: "Command and Control"
+severity: Critical
+category: "Command and Control"
+action: KillAndQuarantine
+action_description: >
+  Detecta netcat y variantes (nc, ncat, netcat, powercat) ejecutándose en modo
+  listener (flag -l en cualquier agrupación, o "listen"), indicando apertura de
+  un puerto para recibir conexiones entrantes: bind shell, pivoting o C2 inverso.
+  KillAndQuarantine defendible por lo inusual de un listener netcat en endpoints
+  Windows; validar si hay red team autorizado (ncat viene con Nmap).
+scope: site
+status: Draft
+expiration: Permanent
+tags:
+  - command-and-control
+  - c2
+  - netcat
+  - listener
+  - pivoting
+notes:
+  - >
+    Un netcat en modo listener desde un endpoint Windows es casi siempre
+    malicioso: los administradores rara vez lo usan así. Se incluye powercat.ps1
+    (implementación de netcat en PowerShell, muy usada en post-explotación).
+  - >
+    MITRE reajustado: un listener NO es T1571 (Non-Standard Port, que aplica al
+    tráfico por puerto no estándar, no a abrir el listener). Se usa T1059 como
+    principal (suele desembocar en shell/intérprete remoto) y T1571 como
+    secundaria por el uso frecuente de puertos altos no estándar. Un bind shell
+    netcat es acceso remoto / C2, no meramente "puerto no estándar".
+  - >
+    Detección de flags robustecida con regex: el orden de opciones en netcat es
+    libre (-l, -lvp, -nlvp, -lp, -vlnp...), por lo que buscar cadenas fijas como
+    "-lvp" deja huecos. El patrón ' -[a-z]*l[a-z]* ' caza la flag 'l' en
+    cualquier cluster de opciones. Se complementa con "listen" para la forma
+    larga.
+syntax_checked: yes
+validation_status: not_tested
+query: |
+  event.type = 'Process Creation' 
+    and tgt.process.name in ('nc.exe', 'nc64.exe', 'ncat.exe', 'netcat.exe', 'powercat.ps1') 
+    and (tgt.process.cmdline matches '(?i).* -[a-z]*l[a-z]* .*' or tgt.process.cmdline contains:anycase 'listen')

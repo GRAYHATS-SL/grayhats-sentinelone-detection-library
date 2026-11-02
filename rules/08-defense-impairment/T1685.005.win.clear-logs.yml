@@ -1,0 +1,48 @@
+name: "Clear Windows Event Logs"
+author: "GrayHats Detection Team"
+license: "AGPL-3.0-or-later"
+os: windows
+mitre:
+  tactic: "Defense Impairment"
+  techniques:
+    - id: T1685.005
+      name: "Clear Windows Event Logs"
+severity: High
+category: "Defense Evasion"
+action: "Detect"
+action_description: >
+  Se ha detectado un intento de borrado de logs de Windows.
+scope: site
+status: Draft
+expiration: Permanent
+tags: 
+  - anti-forensics
+  - log-clearing 
+  - wevtutil
+  - lolbin 
+  - defense-impairment
+art_test: true
+art_technique: T1685.005
+tests_included: [1, 2, 3]
+test_guids:
+  - "e6abb60e-26b8-41da-8aae-0c35174b0967"   # Test 1: Clear Logs
+  - "b13e9306-3351-4b4b-a6e8-477358b0b498"   # Test 2: Delete System Logs Using Clear-EventLog
+  - "83dac837-5685-45ed-b10b-9f047572100b"   # Test 3: BlackCat Ransomware Full Log Clear
+coverage: partial
+validation_status: validated
+last_validated: "2026-10-14"
+syntax_checked: true
+query: |
+  event.type = 'Process Creation'
+  AND endpoint.os = 'windows'
+
+  AND (
+
+  (tgt.process.name = 'wevtutil.exe'
+  AND tgt.process.cmdline contains:anycase (' cl ', 'clear-log'))
+
+  OR
+  (tgt.process.name contains:anycase ('pwsh', 'powershell')
+  AND tgt.process.cmdline contains:anycase ('Clear-EventLog'))
+
+  )

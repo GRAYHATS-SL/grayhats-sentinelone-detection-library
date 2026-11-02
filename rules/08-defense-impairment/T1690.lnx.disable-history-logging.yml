@@ -1,0 +1,71 @@
+# T1070.003.lnx.disable-history-logging.yml
+name: "Defense Evasion - Disable Linux Shell History Logging"
+author: "GrayHats Detection Team"
+license: "AGPL-3.0-or-later"
+os: linux
+art_test: yes
+art_technique: T1070.003
+tests_included: [6, 7]
+test_guids:
+  - "7e6721df-5f08-4370-9255-f06d8a77af4c"   # Test #6: unset HISTFILE / HISTFILESIZE=0 / history -c
+  - "784e4011-bd1a-4ecd-a63a-8feb278512e6"   # Test #7: set +o history en ~/.bashrc
+coverage: full
+validation_status: not_tested
+last_validated: null
+mitre:
+  tactic: "Defense Impairment"
+  tactics:
+    - "Defense Impairment"
+    - "Persistence"
+  techniques:
+    - id: T1690
+      name: "Prevent Command History Logging"
+severity: High
+category: "Defense Impairment"
+action: Detect
+action_description: >
+  Detecta la desactivación del registro de historial de shell: unset HISTFILE,
+  HISTFILESIZE=0, "set +o history", history -c, y la persistencia de estas
+  directivas en ~/.bashrc. Un atacante deshabilita el historial para que sus
+  comandos posteriores no queden registrados. Basada en los tests ART T1070.003 #6 y #7.
+scope: site
+status: Draft
+expiration: Permanent
+tags:
+  - defense-evasion
+  - linux
+  - disable-history
+  - histfile
+  - anti-forensics
+notes:
+  - >
+    Cubre #6 (deshabilitar en la sesión actual: unset HISTFILE, export
+    HISTFILESIZE=0, history -c) y #7 (persistente: "set +o history" añadido a
+    ~/.bashrc). La diferencia clave: #7 CRUZA a Persistence, porque deja la
+    directiva en .bashrc para que TODA sesión futura arranque sin historial — de
+    ahí el tactics con Defense Evasion + Persistence.
+  - >
+    Estos comandos suelen ser BUILTINS del shell (unset, set, export, history), no
+    procesos propios. La detección depende críticamente de que el tenant capture la
+    cmdline del shell con estos builtins. Si no los captura, la vía fiable es el
+    ángulo de FICHERO para el test #7: una File Modification sobre ~/.bashrc que
+    añada "set +o history" (regla hermana). Verificar captura de builtins.
+  - >
+    unset HISTFILE y HISTFILESIZE=0 casi no tienen uso legítimo en un contexto de
+    ataque; en cambio "history -c" lo usa a veces gente legítimamente. El combo de
+    varios de estos en una misma sesión es la señal fuerte.
+  - >
+    La persistencia en .bashrc (#7) es especialmente valiosa: modificar .bashrc
+    para deshabilitar historial es anti-forense deliberado. La regla hermana de
+    fichero sobre .bashrc/.bash_profile/.profile lo caza de forma robusta.
+  - >
+    Verificar campos y captura de builtins en el tenant antes de confiar en esta
+    regla como única vía.
+query: |
+  event.type = 'Process Creation' 
+  and endpoint.os = 'linux' 
+  and (tgt.process.cmdline matches '(?i).*unset\s+HISTFILE.*' 
+  or tgt.process.cmdline matches '(?i).*HISTFILESIZE\s*=\s*0.*' 
+  or tgt.process.cmdline contains:anycase 'set +o history' 
+  or tgt.process.cmdline matches '(?i).*history\s+-c.*' 
+  or tgt.process.cmdline matches '(?i).*HISTFILE\s*=\s*/dev/null.*')

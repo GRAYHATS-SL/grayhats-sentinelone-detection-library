@@ -1,0 +1,81 @@
+name: "Command and Control - Beaconing Approximation via Connection Frequency (Strict LOLBins)"
+author: "GrayHats Detection Team"
+license: "AGPL-3.0-or-later"
+os: windows
+mitre:
+  tactic: "Command and Control"
+  techniques:
+    - id: T1071.001
+      name: "Application Layer Protocol: Web Protocols"
+severity: Critical
+category: "Command and Control"
+action: Detect
+action_description: >
+  Aproximación en tiempo real al beaconing: detecta LOLBins que nunca tienen
+  motivo legítimo para conectar repetidamente (rundll32, regsvr32, mshta,
+  wscript, cscript) realizando múltiples conexiones salientes en una ventana
+  corta. NO mide regularidad ni destino fijo (limitación de STAR); es una red
+  de detección gruesa. El beaconing real (jitter/periodicidad hacia un mismo
+  C2) se detecta por análisis temporal en hunting (query hermana).
+scope: site
+status: Draft
+expiration: Permanent
+tags:
+  - command-and-control
+  - c2
+  - beacon
+  - frequency
+  - lolbin
+notes:
+  - >
+    LIMITACIÓN DE STAR (importante): el trigger "count within" agrupa por el
+    ámbito del proceso/agente y cuenta eventos que cumplen el filtro, pero NO
+    agrupa por dst.ip.address ni mide la varianza de los intervalos. Es decir,
+    cuenta "N conexiones a cualquier destino en T", no "N conexiones regulares
+    al MISMO destino", que es la definición real de beacon. Por eso esta regla
+    se limita a LOLBins que no deberían conectar repetidamente jamás: para ellos
+    el conteo por sí solo ya es anómalo, aunque no se mida la regularidad.
+  - >
+    Se retiraron powershell.exe, pwsh.exe, cmd.exe, certutil.exe y bitsadmin.exe
+    de esta regla: hacen polling/heartbeats legítimos (APIs, actualizaciones,
+    inventario) y con un conteo sin agrupación por destino generan demasiados
+    falsos positivos. Su beaconing se detecta mejor en la query de hunting con
+    análisis de jitter, no aquí.
+  - >
+    Umbral bajado a "count > 3 within 300": beacons de Cobalt Strike/Sliver con
+    sleep de 60-120s producen ~2-5 conexiones en 5 minutos; con jitter, menos.
+    Un umbral de >5 dejaría escapar justo los beacons lentos. Con >3 se capturan
+    los de ~60-90s. Ajustar según el perfil de tráfico tras el baseline.
+  - >
+    Se retiró "tgt.network.dns.request contains 'https://'": un registro DNS es
+    solo el hostname, sin esquema de protocolo, y además un evento IP Connect no
+    lleva poblado dns.request (confirmado en otras reglas del repo). Ese campo
+    estaría siempre vacío; la detección real queda en proceso + frecuencia.
+  - >
+    Campos confirmados: event.type = 'IP Connect', event.network.direction. No
+    hay sustituto directo por IP para excluir dominios legítimos (los rangos
+    cloud son amplios y cambiantes); si genera ruido, excluir por nombre de
+    proceso, no por IP.
+  - >
+    Validar en Detect al menos 2 semanas antes de endurecer. Aun con la lista
+    estricta de LOLBins, revisar si alguna herramienta legítima (instaladores,
+    software de gestión) usa rundll32/regsvr32 con red de forma repetida en el
+    entorno concreto y excluirla por proceso padre.
+validation_status: not_tested
+query: |
+  event.type = 'IP Connect' 
+    and event.network.direction = 'OUTGOING' 
+    and src.process.name contains:anycase ('rundll32.exe', 'regsvr32.exe', 'mshta.exe', 'wscript.exe', 'cscript.exe')
+trigger: |
+  count > 3 within 300
+
+power_query_hunting: |
+  event.type = 'IP Connect'
+    and event.network.direction = 'OUTGOING'
+    and !(dst.ip.address matches '^(10\.|127\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[01])\.)')
+    | group conexiones = count(), primera = min(event.time), ultima = max(event.time) by endpoint.name, src.process.name, dst.ip.address, dst.port.number
+    | filter conexiones > 10
+    | let duracion_seg = (ultima - primera) / 1000
+    | let intervalo_medio_seg = duracion_seg / conexiones
+    | filter intervalo_medio_seg > 30 and intervalo_medio_seg < 600
+    | sort intervalo_medio_seg

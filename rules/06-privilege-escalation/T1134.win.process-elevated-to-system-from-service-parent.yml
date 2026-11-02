@@ -1,0 +1,48 @@
+name: "Privilege Escalation - Process Elevated to SYSTEM from Service Account Parent"
+author: "GrayHats Detection Team"
+license: "AGPL-3.0-or-later"
+os: windows
+mitre:
+  tactic: "Privilege Escalation"
+  techniques:
+    - id: T1134
+      name: "Access Token Manipulation"
+  secondary:
+    - id: T1134.001
+      name: "Token Impersonation/Theft"
+      tactic: "Privilege Escalation"
+    - id: T1134.002
+      name: "Create Process with Token"
+      tactic: "Privilege Escalation"
+severity: Critical
+category: "Privilege Escalation"
+action: Detect
+action_description: >
+  Se ha detectado que un proceso que corre con una cuenta de servicio
+  (LOCAL SERVICE, NETWORK SERVICE, IIS APPPOOL, NT SERVICE) ha creado un proceso
+  con usuario SYSTEM (NT AUTHORITY\SYSTEM). Posible abuso de SeImpersonatePrivilege
+  (ataques tipo Potato: JuicyPotato, PrintSpoofer, GodPotato...) para la elevación
+  de privilegios a SYSTEM.
+scope: site
+status: Draft
+expiration: Permanent
+tags:
+  - privilege-escalation
+  - token-manipulation
+  - getsystem
+  - seimpersonate
+  - behavioral
+  - high-fidelity
+notes:
+  - >
+    Dado que la regla puede disparar falsos positivos, la regla se pondrá en DETECT
+    para valorar el nivel de posible ruido generado.
+art_test: false
+syntax_checked: true
+validation_status: not_tested
+query: |
+  event.type = 'Process Creation'
+  AND (src.process.user in ('NT AUTHORITY\\LOCAL SERVICE', 'NT AUTHORITY\\NETWORK SERVICE')
+  OR src.process.user contains:anycase 'IIS APPPOOL\\'
+  OR src.process.user contains:anycase 'NT SERVICE\\')
+  AND tgt.process.user = 'NT AUTHORITY\\SYSTEM'

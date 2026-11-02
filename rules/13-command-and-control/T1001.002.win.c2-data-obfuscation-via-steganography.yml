@@ -1,0 +1,62 @@
+name: "Data Obfuscation - Steganography para C2 / exfiltración"
+author: "GrayHats Detection Team"
+license: "AGPL-3.0-or-later"
+os: windows
+mitre:
+  tactic: Command and Control
+  techniques:
+    - id: T1001.002
+      name: Steganography
+severity: High
+category: Command and Control
+action: Detect
+action_description: >
+  Genera alerta para revisión analista. NO se recomienda KillAndQuarantine
+  de partida: la detección de esteganografía es heurística/comportamental y
+  propensa a falsos positivos (editores de imagen, software multimedia,
+  procesamiento legítimo de ficheros gráficos). Elevar a acción de
+  contención solo tras validar la query contra la telemetría real del
+  cliente.
+scope: site
+status: Draft
+expiration: Permanent
+tags:
+  - command-and-control
+  - data-obfuscation
+  - steganography
+  - c2
+notes:
+  - >
+    T1001.002 (Steganography) cuelga de la táctica Command and Control. El
+    adversario oculta datos o tráfico de C2 dentro de ficheros de apariencia
+    legítima (imágenes PNG/JPG/BMP, audio, PDF, etc.) para dificultar la
+    detección. A nivel EDR el contenido oculto es prácticamente invisible,
+    así que la detección se apoya en PROXIES de comportamiento, no en el
+    payload esteganográfico en sí.
+  - >
+    FALSOS POSITIVOS esperables: aplicaciones legítimas de edición y
+    procesamiento de imagen, pipelines de diseño, herramientas de captura de
+    pantalla y backup multimedia. Prever exclusiones por NOMBRE de binario
+    legítimo conocido (mismo criterio que en la regla de vssadmin: excluir
+    por nombre, no por publisher, para no descartar cmd.exe/powershell.exe
+    firmados por Microsoft).
+  - >
+    Corregido tras revisión: la query traía un "and" colgante al principio
+    (sin nada delante), lo que habría dado error de sintaxis al pegarla en
+    consola. También se normalizó "action: Alert" a "action: Detect", el
+    término real usado en el resto del repo (Detect/Kill/KillAndQuarantine/
+    DisconnectNetwork).
+  - >
+    "-Encoding Byte" está obsoleto desde PowerShell 7 (reemplazado por
+    -AsByteStream); si el entorno usa pwsh moderno, añadir también ese
+    argumento a la lista de la cmdline.
+syntax_checked: false
+validation_status: not_tested
+query: |
+  endpoint.os = 'windows'
+  and event.type = 'File Creation'
+  and src.process.name in ('powershell.exe', 'pwsh.exe')
+  and src.process.cmdline matches '(?i)get-content.*set-content'
+  and src.process.cmdline contains:anycase ('-Encoding', '-enc')
+  and src.process.cmdline contains:anycase 'byte'
+  and tgt.file.extension in ('jpg', 'jpeg', 'png', 'bmp', 'gif', 'tiff', 'tif')

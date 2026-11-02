@@ -1,0 +1,48 @@
+name: "Defense Evasion - Windows Defender Disabled or Modified"
+author: "GrayHats Detection Team"
+license: "AGPL-3.0-or-later"
+os: windows
+mitre:
+  tactic: "Defense Impairment"
+  techniques:
+    - id: T1685
+      name: "Disable or Modify Tools"
+severity: High
+category: "Defense Impairment"
+action: KillAndQuarantine
+action_description: >
+  Mata el proceso que intenta deshabilitar Windows Defender y pone
+  en cuarentena el binario responsable.
+scope: site
+status: Draft
+expiration: Permanent
+tags:
+  - defense-evasion
+  - windows-defender
+  - tampering
+notes:
+  - >
+    Señal inequívoca de ataque en curso. Falsos positivos casi
+    inexistentes en entornos que no usan scripts de administración
+    de Defender.
+  - >
+    Si tu organización usa GPO o scripts de configuración para
+    gestionar Defender, añadir exclusiones de ruta de esos scripts.
+  - >
+    "sc.exe config WinDefend start=disabled" (sin espacio) no es la
+    sintaxis real de sc.exe, que exige un espacio tras el "=" para
+    que el comando surta efecto ("start= disabled"). La condición
+    original solo habría matcheado una variante que en la práctica no
+    llega a deshabilitar nada. Ahora se comprueba "config WinDefend" +
+    "disabled" por separado para cubrir el comando funcione con o sin
+    ese espacio.
+syntax_checked: yes
+validation_status: not_tested
+query: |
+  event.type = 'Process Creation'
+    and (
+    tgt.process.cmdline contains:anycase ('DisableRealtimeMonitoring', 'DisableIOAVProtection', 'DisableBehaviorMonitoring', 'DisableScriptScanning', 'DisableBlockAtFirstSeen', 'MpPreference -ExclusionPath', 'MpPreference -ExclusionProcess', 'MpPreference -ExclusionExtension')
+    or (tgt.process.name = 'sc.exe' and tgt.process.cmdline contains:anycase 'windefend' and tgt.process.cmdline contains:anycase ('stop', 'disabled', 'delete'))
+    or (tgt.process.name = 'net.exe' and tgt.process.cmdline contains:anycase 'stop' and tgt.process.cmdline contains:anycase 'windefend')
+    or (tgt.process.name = 'powershell.exe' and tgt.process.cmdline contains:anycase 'set-mppreference' and tgt.process.cmdline contains:anycase 'disable')
+    )

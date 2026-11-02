@@ -1,0 +1,50 @@
+name: "Execution - Suspicious Script execution from anomalous path"
+author: "GrayHats Detection Team"
+license: "AGPL-3.0-or-later"
+os: windows
+mitre:
+  tactic: Execution
+  techniques:
+    - id: T1059.001
+      name: "Command and Scripting Interpreter: PowerShell"
+  secondary:
+    - id: T1204.002
+      name: "User Execution: Malicious Macro"
+      tactic: "Initial Access"
+severity: Medium
+category: Execution
+action: Detect
+action_description: >
+  Ejecución de script desde ruta anómala.
+scope: site
+status: Draft
+expiration: Permanent
+tags:
+  - execution
+  - script
+  - powershell
+  - wscript
+  - user-folder
+notes:
+  - >
+    Regla genérica que puede generar falsos positivos. Se recomienda
+    mantener en modo Detect y usar los resultados para identificar
+    comportamientos anómalos.
+  - >
+    Falsos positivos esperados (altos, por diseño): software legítimo lanza
+    scripts desde %TEMP%, %APPDATA% y ProgramData constantemente (instaladores,
+    updaters, GPO, herramientas de IT). El retro-hunt de 30 días debe medir el
+    volumen por proceso padre antes de plantear cualquier exclusión o subir de
+    Detect.
+art_test: false
+syntax_checked: true
+validation_status: not_tested
+query: |
+  event.type = 'Process Creation'
+  AND tgt.process.name in:anycase ('powershell.exe', 'pwsh.exe', 'powershell_ise.exe', 'cmd.exe', 'wscript.exe', 'cscript.exe', 'mshta.exe')
+  AND (
+      tgt.process.cmdline contains:anycase ('C:\\Windows\\Temp\\', 'C:\\Users\\Public\\', 'C:\\PerfLogs\\', 'C:\\Temp\\', 'C:\\tmp\\')
+      OR
+      (tgt.process.cmdline contains:anycase 'C:\\Users\\'
+       AND tgt.process.cmdline contains:anycase ('\\AppData\\Local\\Temp\\', '\\AppData\\Roaming\\', '\\Downloads\\', '\\Desktop\\', '\\Documents\\'))
+  )

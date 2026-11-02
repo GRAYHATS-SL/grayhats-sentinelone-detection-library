@@ -1,0 +1,64 @@
+name: "Operational - Volume Shadow Copy Service Error Detected"
+author: "GrayHats Detection Team"
+license: "AGPL-3.0-or-later"
+os: windows
+mitre:
+  tactic: Impact
+  techniques:
+    - id: T1490
+      name: "Inhibit System Recovery"
+  secondary:
+    - id: T1562.001
+      name: "Impair Defenses: Disable or Modify Tools"
+      tactic: "Defense Evasion"
+severity: Medium
+category: Operations
+action: Detect
+action_description: >
+  Genera una alerta cuando el servicio de Volume Shadow Copy (VSS)
+  registra un error crítico. Esto puede indicar un fallo en las
+  copias de seguridad, un problema de configuración o un atacante
+  interfiriendo con VSS.
+scope: site
+status: Draft
+expiration: Permanent
+tags:
+  - operational
+  - vss
+  - shadow-copy
+  - backup-health
+  - monitoring
+notes:
+  - >
+    Esta regla requiere que la ingesta de logs de Windows esté
+    habilitada en la política del agente (Event Logs > System).
+  - >
+    El evento 12289 del proveedor VSS indica un error genérico
+    del servicio de shadow copies. Puede deberse a espacio en
+    disco insuficiente, conflictos con otros proveedores VSS,
+    o manipulación maliciosa.
+  - >
+    Esta regla es de monitorización operativa, no de detección
+    de amenazas. Se recomienda mantenerla en modo Detect y
+    combinarla con un dashboard o una alerta de bajo nivel para
+    el equipo de infraestructura.
+  - >
+    Falsos positivos esperables en servidores con mucho movimiento
+    de discos o con software de backup que interactúa agresivamente
+    con VSS. Ajustar el umbral según el entorno.
+  - >
+    PENDIENTE DE VERIFICAR: 12289 y 8193 son IDs de error de VSS bien
+    documentados. Los IDs 11 y 25 son mucho más genéricos y en otros
+    proveedores de Windows significan cosas completamente distintas
+    (p. ej. el ID 11 del proveedor "Disk" es un error de controladora/
+    bloque dañado, sin relación con VSS). Como el filtro exige
+    event.provider = "VSS", en teoría no deberían cruzarse con esos
+    otros significados — pero antes de activar, confirma contra logs
+    reales de VSS que 11 y 25 son IDs genuinos de ese proveedor y no
+    un error de transcripción.
+syntax_checked: yes
+validation_status: not_tested
+query: |
+  event.type = "Event Log"
+  AND event.provider = "VSS"
+  AND event.id in ('12289', '8193', '11', '25')

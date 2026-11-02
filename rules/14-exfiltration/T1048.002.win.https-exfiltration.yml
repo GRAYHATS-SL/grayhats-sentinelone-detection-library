@@ -1,0 +1,80 @@
+name: "Exfiltration - Suspicious HTTP/HTTPS Upload via System Tool"
+author: "GrayHats Detection Team"
+license: "AGPL-3.0-or-later"
+os: windows
+mitre:
+  tactic: Exfiltration
+  techniques:
+    - id: T1048.002
+      name: "Exfiltration Over Alternative Protocol: Asymmetric Encrypted Non-C2 Protocol"
+    - id: T1567.002
+      name: "Exfiltration to Cloud Storage"
+severity: High
+category: Exfiltration
+action: Detect
+action_description: >
+  Detecta intérpretes del sistema y LOLBins de descarga/subida (PowerShell,
+  curl, wget, certutil, bitsadmin) invocados con argumentos que indican envío
+  de datos a un servidor remoto (Invoke-RestMethod/WebRequest, -Method
+  POST/PUT/PATCH, -InFile, --upload-file, etc.). Detección basada en argumentos
+  de línea de comandos sobre eventos Process Creation. Inicialmente en modo
+  Detect por la posibilidad de falsos positivos en entornos con scripts
+  legítimos de API REST.
+scope: site
+status: Draft
+expiration: Permanent
+tags:
+  - exfiltration
+  - http
+  - curl
+  - powershell
+  - upload
+  - lolbin
+notes:
+  - >
+    Métodos PUT, POST y PATCH son los habituales para enviar datos a un
+    servidor remoto (detectados como "-Method POST", "-Method PUT", etc. para
+    evitar el ruido de "POST" como substring genérico, que casaría con
+    "composer", "postgres", rutas con "post"...). GET puede exfiltrar datos
+    codificados en parámetros de URL, pero se excluye por su altísimo volumen
+    de falsos positivos en navegación y APIs normales.
+  - >
+    Argumentos como -InFile, -Body, --data, --upload-file y -F indican envío
+    de contenido de un archivo local al servidor remoto.
+  - >
+    certutil y bitsadmin se incluyen como LOLBins clásicos de transferencia:
+    aunque se asocian más a descarga (ingress tool transfer), ambos pueden
+    subir datos y son binarios firmados por Microsoft, por lo que evaden
+    detecciones basadas solo en firma.
+  - >
+    Puede generar falsos positivos con PowerShell interactuando con APIs REST
+    legítimas (Azure, Microsoft 365, herramientas de monitorización). Validar
+    en Detect antes de endurecer; establecer un baseline y excluir por dominio
+    dentro de la cmdline o por ruta de script conocido, no a ciegas.
+  - >
+    Corrección de diseño sobre la versión original: la detección por argumentos
+    de línea de comandos debe hacerse sobre eventos "Process Creation", no
+    "Network Connection"/"IP Connect" — la cmdline no está poblada de forma
+    fiable en el evento de red, por lo que la regla original probablemente no
+    dispararía nunca. En Process Creation, el proceso lanzado y su cmdline
+    están en tgt.process.* (src.process es el proceso padre); ambos chequeos
+    (nombre de binario y argumentos) deben referirse a tgt.process.
+  - >
+    La exclusión por DNS se elimina: no existe dns.request en un evento de
+    proceso. Para excluir destinos legítimos se filtra por el dominio dentro
+    de tgt.process.cmdline (la URL suele ir en los argumentos del comando).
+  - >
+    Complemento: esta regla caza la invocación de la herramienta, no el volumen
+    transferido. Para confirmar exfiltración por volumen, correlacionar con
+    Netskope o Palo Alto (bytes por sesión) y con el destino real. El conteo de
+    invocaciones repetidas se hace en Event Search (PowerQuery con | group), no
+    en la regla STAR, que no admite pipes.
+syntax_checked: yes
+validation_status: not_tested
+query: |
+  event.type = 'Process Creation' 
+    and tgt.process.name contains:anycase ('powershell.exe', 'pwsh.exe', 'curl.exe', 'wget.exe', 'certutil.exe', 'bitsadmin.exe') 
+    and (tgt.process.cmdline contains:anycase ('Invoke-RestMethod', 'Invoke-WebRequest', 'curl ', 'wget ') 
+      or tgt.process.cmdline contains:anycase ('-InFile', '-Body', '--data', '--upload-file', '-F ') 
+      or tgt.process.cmdline contains:anycase ('-Method POST', '-Method PUT', '-Method PATCH')) 
+    and !(tgt.process.cmdline contains:anycase ('management.azure.com', 'graph.microsoft.com', 'login.microsoftonline.com'))

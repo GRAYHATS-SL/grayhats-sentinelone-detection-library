@@ -1,0 +1,63 @@
+name: "Exfiltration - High Volume Outbound Data Transfer"
+author: "GrayHats Detection Team"
+license: "AGPL-3.0-or-later"
+os: windows
+mitre:
+  tactic: Exfiltration
+  techniques:
+    - id: T1030
+      name: "Data Transfer Size Limits"
+severity: High
+category: Exfiltration
+action: Detect
+action_description: >
+  Detecta un volumen inusualmente alto de datos salientes desde un
+  endpoint en un corto período de tiempo, lo que puede indicar
+  exfiltración masiva de datos.
+scope: site
+status: Draft
+expiration: Permanent
+tags:
+  - exfiltration
+  - data-transfer
+  - volume
+  - bandwidth
+notes:
+  - >
+    ESTADO: MÁS ESPECULATIVA QUE FUNCIONAL. Esta regla requiere
+    soporte para agregaciones o umbrales en S1QL 2.0 (contar/sumar
+    bytes transferidos en una ventana de tiempo), y ni la sintaxis de
+    agregación ni el campo tgt.network.bytes.sent como valor
+    acumulado por conexión están confirmados. Tal como está escrita,
+    es más una plantilla de la lógica deseada que una query probada.
+    No la actives ni te fíes de que "no salta" como señal de que no
+    hay exfiltración — antes de nada, confirma en la consola si existe
+    algún mecanismo de umbral/frecuencia para reglas STAR (ver también
+    la duda equivalente que dejamos en network-share-mass-encryption.yml
+    sobre "Mass File Modification").
+  - >
+    El umbral de 100 MB en 5 minutos es orientativo. Ajustar según
+    el perfil normal de tráfico de tu organización (servidores de
+    archivos, estaciones de diseño gráfico, etc. pueden tener picos
+    legítimos).
+  - >
+    Combinar con exclusiones de procesos de backup legítimos y
+    cuentas de servicio autorizadas.
+  - >
+    OJO: la última línea traía "dst.ip.address matches '...'" — un
+    placeholder literal (tres puntos), no una regex real. Marcada como
+    "syntax_checked: yes" pero esa condición concreta no puede haberse probado
+    tal cual, o habría fallado/no habría hecho nada útil. La sustituyo
+    por la regex anclada confirmada de rango privado (RFC1918) que ya
+    usamos en win-rdp-outbound.yml, asumiendo que la intención era
+    limitar la alerta a transferencias hacia destinos EXTERNOS
+    (enviar 100MB a un file server interno no es exfiltración).
+    Vuelve a marcar syntax_checked tras confirmar esta línea en consola.
+syntax_checked: false
+validation_status: not_tested
+query: |
+  event.type = 'IP Connect'
+    and event.network.direction = 'OUTGOING'
+    and tgt.network.bytes.sent > 104857600
+    and !(src.process.name contains:anycase ('backup', 'sync', 'onedrive', 'dropbox', 'googledrive'))
+    and !(dst.ip.address matches '^(10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[01])\.)')

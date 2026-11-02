@@ -1,0 +1,42 @@
+name: "Lateral Movement - Lateral Movement payload creation"
+author: "GrayHats Detection Team"
+license: "AGPL-3.0-or-later"
+os: windows
+mitre:
+  tactic: "Lateral Movement"
+  techniques:
+    - id: T1021.002
+      name: "Remote Services: SMB/Windows Admin Shares"
+severity: High
+category: "Lateral Movement"
+action: Detect
+action_description: >
+  Se ha detectado la creación de un archivo producto de un movimiento lateral.
+  Posible payload malicioso.
+scope: site
+status: Draft
+expiration: Permanent
+tags:
+  - lateral-movement
+notes:
+  - >
+    Cubre la creación de archivos en el equipo víctima, fuente
+    de un movimiento lateral. Se espera una gran cantidad de falsos
+    positivos dado que la naturaleza del comportamiento de esta
+    técnica es benigna.
+  - >
+    Esta regla tiene utilidad sobre todo para los parques en los que no se hace
+    uso de SMB. Esta regla detectaría los accesos a Admin Shares junto con la
+    creación de Payloads.
+  - >
+    Dado que el movimiento lateral mediante Admin Shares se lleva a cabo
+    internamente entre equipos de la organización, se han de crear reglas específicas
+    para detectar patrones de movimiento lateral del lado del equipo que realiza
+    la conexión saliente.
+
+validation_status: validated
+last_validated: "2026-10-14"
+query: |
+  event.type = 'File Creation'
+  AND endpoint.os = 'windows'
+  AND tgt.file.origin.creatorProcess.name contains:anycase 'Lateral Movement'
