@@ -19,7 +19,13 @@ agradecemos que se hagan de forma privada en vez de vía issue público:
 
 ## Cómo reportarlo
 
-Envía un correo a **csirt@grayhats.com** con:
+Puedes hacerlo por cualquiera de estas dos vías:
+
+- **Reporte privado de GitHub:** en la pestaña **Security** de este
+  repositorio, pulsa **Report a vulnerability**.
+- **Correo:** escribe a **csirt@grayhats.com**.
+
+En ambos casos, incluye:
 - Qué regla(s) o script(s) están afectados.
 - Pasos para reproducir el problema.
 - Impacto que consideras que tiene.
